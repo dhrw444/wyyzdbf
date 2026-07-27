@@ -699,7 +699,7 @@
             <button class="btn btn-secondary" onclick="addAccount()">+ 添加账号</button>
           </div>
           <div class="accounts-grid" id="accountsGrid">
-            <!-- 账号卡片将在这里动态生成 -->
+            <div class="console-line info">暂无账号，请点击上方"+ 添加账号"开始添加</div>
           </div>
         </div>
 
@@ -735,12 +735,7 @@
   </div>
 
 <script>
-let accounts = [
-  { id: 1, name: '账号 1', phone: '138****8001', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 2, name: '账号 2', phone: '138****8002', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 3, name: '账号 3', phone: '138****8003', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 4, name: '账号 4', phone: '138****8004', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
-];
+let accounts = [];
 
 let threadCount = 4;
 let currentPage = 'accounts';

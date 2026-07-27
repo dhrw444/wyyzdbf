@@ -602,22 +602,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def init_demo_accounts():
     """初始化演示账号"""
-    demo_accounts = [
-        {'name': '账号 1', 'phone': '138****8001', 'password': '', 'status': 'offline'},
-        {'name': '账号 2', 'phone': '138****8002', 'password': '', 'status': 'offline'},
-        {'name': '账号 3', 'phone': '138****8003', 'password': '', 'status': 'offline'},
-        {'name': '账号 4', 'phone': '138****8004', 'password': '', 'status': 'offline'},
-    ]
-
-    for idx, acc_data in enumerate(demo_accounts, 1):
-        account = Account(
-            id=idx,
-            name=acc_data['name'],
-            phone=acc_data['phone'],
-            password=acc_data['password'],
-            status=acc_data['status']
-        )
-        task_manager['accounts'][idx] = account
+    # 不再自动创建虚构账号
+    pass
 
 
 def main():
