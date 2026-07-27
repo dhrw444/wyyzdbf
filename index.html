@@ -663,6 +663,8 @@
 </style>
 </head>
 <body>
+  <div class="scanlines"></div>
+
   <div class="header">
     <div class="container">
       <div class="header-content">
@@ -747,6 +749,22 @@
           <option value="daily">每日推荐任务</option>
           <option value="custom">自定义任务</option>
         </select>
+      </div>
+    </div>
+
+    <!-- 搜索页面 -->
+    <div id="page-search" class="page">
+      <div class="search-section">
+        <div class="section-header">
+          <div class="section-title">🔍 搜索歌曲</div>
+        </div>
+        <div class="search-input-container">
+          <input type="text" id="searchInput" placeholder="输入歌手名或歌曲名..." onkeypress="if(event.key==='Enter')searchSongs()">
+          <button class="btn btn-primary" onclick="searchSongs()">搜索</button>
+        </div>
+        <div class="search-results" id="searchResults">
+          <div class="console-line info">输入关键词搜索歌曲...</div>
+        </div>
       </div>
     </div>
 
