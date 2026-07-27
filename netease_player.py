@@ -7,7 +7,6 @@ import binascii
 import hashlib
 import json
 import os
-import pickle
 import random
 import subprocess
 import sys
@@ -71,20 +70,25 @@ def _api_post(url, data, cookies=None):
         "Content-Type": "application/x-www-form-urlencoded",
     }
     encrypted = _encrypt_params(data)
-    resp = requests.post(url, data=encrypted, headers=headers, cookies=cookies, timeout=15)
-    return resp.json()
+    try:
+        resp = requests.post(url, data=encrypted, headers=headers, cookies=cookies, timeout=15)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        return {"code": -1, "message": str(e)}
 
 
 def _save_cookies(session):
-    with open(COOKIE_FILE, "wb") as f:
-        pickle.dump(session.cookies.get_dict(), f)
+    COOKIE_FILE.write_text(json.dumps(session.cookies.get_dict(), ensure_ascii=False, indent=2))
 
 
 def _load_cookies():
     if not COOKIE_FILE.exists():
         return None
-    with open(COOKIE_FILE, "rb") as f:
-        return pickle.load(f)
+    try:
+        return json.loads(COOKIE_FILE.read_text())
+    except Exception:
+        return None
 
 
 def _md5(text):
@@ -171,7 +175,7 @@ def login_qr():
             {"key": unikey, "type": "1"},
             cookies=session.cookies,
         )
-        code = result.get("code")
+        code = result.get("code") if isinstance(result, dict) else -1
         if code == 800:
             time.sleep(3)
         elif code == 803:
@@ -186,7 +190,6 @@ def login_qr():
             print("请在手机上确认登录...")
             time.sleep(3)
         else:
-            print(f"状态: {result}")
             time.sleep(3)
     sys.exit("扫码超时")
 
@@ -524,13 +527,12 @@ def play_n_minutes(songs, minutes):
     total_m, total_s = divmod(acc, 60)
     print(f"\n===== 播放完毕，共 {idx} 首，累计 {total_m}分{total_s}秒 =====")
 
-    print("未找到 mpv / ffplay，正在下载音频...")
-    return _download_audio(url, title)
-
 
 def _download_audio(url, title=""):
-    safe = "".join(c for c in title if c.isalnum() or c in " _-") or "song"
-    filepath = Path(f"/tmp/{safe}.mp3")
+    import re
+    safe = "".join(c for c in title if c.isalnum() or c in " _-()") or "song"
+    safe = re.sub(r"[^a-zA-Z0-9_\-\s\(\)]", "", safe).strip()[:50]
+    filepath = Path(f"/tmp/{safe}.mp3") if safe else Path("/tmp/song.mp3")
     try:
         resp = requests.get(url, stream=True, timeout=60)
         resp.raise_for_status()
@@ -554,6 +556,8 @@ def _download_audio(url, title=""):
 
 def search_all_songs(keyword, max_results=50):
     """搜索歌手/关键词，获取尽可能多的歌曲"""
+    session = get_session()
+    cookies = session.cookies if session else {}
     all_songs = []
     offset = 0
     while len(all_songs) < max_results:
@@ -569,7 +573,7 @@ def search_all_songs(keyword, max_results=50):
         result = _api_post(
             "https://music.163.com/weapi/cloudsearch/get/web",
             data,
-            cookies=get_session().cookies if get_session() else {},
+            cookies=cookies,
         )
         if result.get("code") != 200:
             break
@@ -590,13 +594,16 @@ def search_all_songs(keyword, max_results=50):
     return all_songs
 
 
-def check_playable(song_id):
+def check_playable(song_id, cookies=None):
     """检测单首歌曲是否可播放"""
+    if cookies is None:
+        session = get_session()
+        cookies = session.cookies if session else {}
     data = {"ids": f"[{song_id}]", "level": "standard", "encodeType": "aac"}
     result = _api_post(
         "https://music.163.com/weapi/song/enhance/player/url/v1",
         data,
-        cookies=get_session().cookies if get_session() else {},
+        cookies=cookies,
     )
     if result.get("code") != 200:
         return False, None, ""
@@ -609,6 +616,9 @@ def check_playable(song_id):
 
 def stats_artist(keyword, max_results=50):
     """统计某歌手/关键词的歌曲数和总时长"""
+    session = get_session()
+    cookies = session.cookies if session else {}
+
     print(f"\n正在搜索: {keyword} ...")
     songs = search_all_songs(keyword, max_results)
     if not songs:
@@ -630,12 +640,11 @@ def stats_artist(keyword, max_results=50):
         m, sec = divmod(s["duration"], 60)
         print(f"  [{i}] {s['name']} - {s['artists']} [{m}:{sec:02d}]")
 
-    # 检测可播放性
     print(f"\n正在检测可播放歌曲...")
     playable = []
     unplayable = []
     for i, s in enumerate(songs):
-        ok, url, info = check_playable(s["id"])
+        ok, url, info = check_playable(s["id"], cookies)
         if ok:
             playable.append({**s, "url": url, "quality": info})
         else:
