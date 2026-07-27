@@ -173,6 +173,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/exec":
             return self.handle_exec_command()
 
+        if path == "/api/search":
+            return self.handle_search()
+
+        if path == "/api/play":
+            return self.handle_play()
+
         self.send_error(404)
 
     def handle_add_account(self):
@@ -338,6 +344,86 @@ class Handler(BaseHTTPRequestHandler):
 
         result = run_cmd(args)
         self._send_json(result)
+
+    def handle_search(self):
+        """处理歌曲搜索"""
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        keyword = data.get("keyword", "").strip()
+
+        if not keyword:
+            self._send_json({"success": False, "message": "请输入搜索关键词"}, 400)
+            return
+
+        # 使用第一个在线账号的cookies
+        online_account = None
+        for account in task_manager['accounts'].values():
+            if account.status == 'online':
+                online_account = account
+                break
+
+        if not online_account:
+            self._send_json({"success": False, "message": "没有在线账号可用"}, 400)
+            return
+
+        try:
+            # 这里需要实际调用搜索API
+            # 临时返回模拟数据
+            songs = [
+                {
+                    "id": 1,
+                    "name": f"示例歌曲1 - {keyword}",
+                    "artists": "示例歌手",
+                    "album": "示例专辑",
+                    "duration": 240
+                },
+                {
+                    "id": 2,
+                    "name": f"示例歌曲2 - {keyword}",
+                    "artists": "示例歌手2",
+                    "album": "示例专辑2",
+                    "duration": 180
+                }
+            ]
+
+            self._send_json({
+                "success": True,
+                "songs": songs,
+                "total": len(songs)
+            })
+        except Exception as e:
+            self._send_json({"success": False, "message": f"搜索失败: {str(e)}"}, 500)
+
+    def handle_play(self):
+        """处理播放歌曲"""
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        song_id = data.get("song_id")
+
+        if not song_id:
+            self._send_json({"success": False, "message": "请提供歌曲ID"}, 400)
+            return
+
+        # 使用第一个在线账号播放
+        online_account = None
+        for account in task_manager['accounts'].values():
+            if account.status == 'online':
+                online_account = account
+                break
+
+        if not online_account:
+            self._send_json({"success": False, "message": "没有在线账号可用"}, 400)
+            return
+
+        try:
+            # 这里需要实际调用播放API
+            self._send_json({
+                "success": True,
+                "song_id": song_id,
+                "song_name": f"歌曲 {song_id}"
+            })
+        except Exception as e:
+            self._send_json({"success": False, "message": f"播放失败: {str(e)}"}, 500)
 
     def start_account_task(self, account_id, command):
         """启动账号任务"""

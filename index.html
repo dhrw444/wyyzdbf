@@ -453,7 +453,155 @@
   }
 
   /* Responsive */
-  @media (max-width: 768px) {
+  <!-- Navigation -->
+  .nav-container {
+    background: var(--spotify-dark);
+    border-bottom: 1px solid var(--spotify-gray);
+    padding: 15px 0;
+    flex-shrink: 0;
+  }
+
+  .nav-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .nav-item {
+    background: var(--spotify-gray);
+    border: 1px solid var(--spotify-gray);
+    color: var(--spotify-light-gray);
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-item:hover {
+    border-color: var(--spotify-green);
+    color: var(--spotify-white);
+  }
+
+  .nav-item.active {
+    background: var(--spotify-green);
+    color: var(--spotify-black);
+    border-color: var(--spotify-green);
+  }
+
+  .nav-icon {
+    font-size: 1.1rem;
+  }
+
+  /* Search Page */
+  .page {
+    display: none;
+  }
+
+  .page.active {
+    display: block;
+  }
+
+  .search-section {
+    background: var(--spotify-dark);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--spotify-gray);
+  }
+
+  .search-input-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .search-input-container input {
+    flex: 1;
+    background: var(--spotify-gray);
+    border: 1px solid var(--spotify-gray);
+    color: var(--spotify-white);
+    padding: 15px 20px;
+    border-radius: 25px;
+    font-size: 1rem;
+  }
+
+  .search-input-container input:focus {
+    outline: none;
+    border-color: var(--spotify-green);
+  }
+
+  .search-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .song-card {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--spotify-gray);
+    border-radius: 12px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .song-card:hover {
+    border-color: var(--spotify-green);
+    transform: translateY(-2px);
+    background: rgba(29, 185, 84, 0.1);
+  }
+
+  .song-name {
+    font-weight: bold;
+    color: var(--spotify-white);
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .song-artists {
+    color: var(--spotify-light-gray);
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+  }
+
+  .song-album {
+    color: var(--spotify-light-gray);
+    font-size: 0.85rem;
+  }
+
+  .song-duration {
+    color: var(--spotify-green);
+    font-size: 0.85rem;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  @media (max-width: 640px) {
+    .search-results {
+      grid-template-columns: 1fr;
+    }
+
+    .nav-content {
+      justify-content: center;
+    }
+
+    .nav-item {
+      flex: 1;
+      justify-content: center;
+      min-width: 80px;
+    }
+  }
     .container {
       padding: 10px;
     }
@@ -540,8 +688,23 @@
     </div>
   </div>
 
+  <div class="nav-container">
+    <div class="nav-content">
+      <div class="nav-item active" data-page="accounts" onclick="showPage('accounts')">
+        <span class="nav-icon">📋</span>
+        <span>账号管理</span>
+      </div>
+      <div class="nav-item" data-page="search" onclick="showPage('search')">
+        <span class="nav-icon">🔍</span>
+        <span>搜索</span>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
-    <div class="stats-grid">
+    <!-- 账号管理页面 -->
+    <div id="page-accounts" class="page active">
+      <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value" id="totalTasks">0</div>
         <div class="stat-label">总任务数</div>
@@ -579,11 +742,27 @@
       <div class="control-group">
         <label>任务类型:</label>
         <select id="taskType" onchange="updateTaskType()">
-          <option value="search">搜索任务</option>
           <option value="play">播放任务</option>
           <option value="stats">统计任务</option>
+          <option value="daily">每日推荐任务</option>
           <option value="custom">自定义任务</option>
         </select>
+      </div>
+    </div>
+
+    <!-- 搜索页面 -->
+    <div id="page-search" class="page">
+      <div class="search-section">
+        <div class="section-header">
+          <div class="section-title">🔍 搜索歌曲</div>
+        </div>
+        <div class="search-input-container">
+          <input type="text" id="searchInput" placeholder="输入歌手名或歌曲名..." onkeypress="if(event.key==='Enter')searchSongs()">
+          <button class="btn btn-primary" onclick="searchSongs()">搜索</button>
+        </div>
+        <div class="search-results" id="searchResults">
+          <div class="console-line info">输入关键词搜索歌曲...</div>
+        </div>
       </div>
     </div>
 
@@ -627,8 +806,33 @@ let accounts = [
 ];
 
 let isRunning = false;
-let currentTaskType = 'search';
+let currentTaskType = 'play';
 let threadCount = 4;
+let currentPage = 'accounts';
+
+function showPage(pageName) {
+  currentPage = pageName;
+
+  // 更新导航状态
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.remove('active');
+    if (item.dataset.page === pageName) {
+      item.classList.add('active');
+    }
+  });
+
+  // 更新页面显示
+  document.querySelectorAll('.page').forEach(page => {
+    page.classList.remove('active');
+  });
+
+  const targetPage = document.getElementById(`page-${pageName}`);
+  if (targetPage) {
+    targetPage.classList.add('active');
+  }
+
+  log(`切换到${pageName === 'accounts' ? '账号管理' : '搜索'}页面`, 'info');
+}
 
 function renderAccounts() {
   const grid = document.getElementById('accountsGrid');
@@ -892,7 +1096,77 @@ function updateThreadCount() {
 
 function updateTaskType() {
   currentTaskType = document.getElementById('taskType').value;
-  log(`任务类型设置为: ${currentTaskType}`, 'info');
+  const explanations = {
+    'play': '批量播放指定歌手的歌曲，支持连播模式和计时模式',
+    'stats': '统计指定歌手的歌曲数据和播放可用性分析',
+    'daily': '获取账号个性化每日推荐歌曲',
+    'custom': '执行自定义命令'
+  };
+  log(`任务类型设置为: ${currentTaskType} - ${explanations[currentTaskType]}`, 'info');
+}
+
+async function searchSongs() {
+  const keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) {
+    alert('请输入搜索关键词');
+    return;
+  }
+
+  const resultsContainer = document.getElementById('searchResults');
+  resultsContainer.innerHTML = '<div class="console-line info">正在搜索...</div>';
+
+  try {
+    const response = await fetch('/api/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keyword: keyword}),
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.songs && result.songs.length > 0) {
+      resultsContainer.innerHTML = result.songs.map((song, index) => {
+        const minutes = Math.floor(song.duration / 60);
+        const seconds = song.duration % 60;
+        return `
+          <div class="song-card" onclick="playSong(${song.id})">
+            <div class="song-name">${song.name}</div>
+            <div class="song-artists">${song.artists}</div>
+            <div class="song-album">${song.album}</div>
+            <div class="song-duration">${minutes}:${seconds.toString().padStart(2, '0')}</div>
+          </div>
+        `;
+      }).join('');
+
+      log(`搜索完成: 找到 ${result.songs.length} 首歌曲`, 'success');
+    } else {
+      resultsContainer.innerHTML = '<div class="console-line warn">未找到匹配的歌曲</div>';
+      log('搜索未找到结果', 'warn');
+    }
+  } catch (error) {
+    resultsContainer.innerHTML = '<div class="console-line error">搜索失败</div>';
+    log(`搜索出错: ${error.message}`, 'error');
+  }
+}
+
+async function playSong(songId) {
+  log(`播放歌曲 ID: ${songId}`, 'info');
+  try {
+    const response = await fetch('/api/play', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({song_id: songId}),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      log(`开始播放歌曲: ${result.song_name}`, 'success');
+    } else {
+      log(`播放失败: ${result.output}`, 'error');
+    }
+  } catch (error) {
+    log(`播放出错: ${error.message}`, 'error');
+  }
 }
 
 // 初始化
