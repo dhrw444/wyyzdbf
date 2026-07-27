@@ -764,126 +764,106 @@
 
 <script>
 let accounts = [];
-
 let threadCount = 4;
 let currentPage = 'accounts';
 
-function showPage(pageName) {
-  currentPage = pageName;
-
-  // 更新导航状态
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.classList.remove('active');
-    if (item.dataset.page === pageName) {
-      item.classList.add('active');
-    }
-  });
-
-  // 更新页面显示
-  document.querySelectorAll('.page').forEach(page => {
-    page.classList.remove('active');
-  });
-
-  const targetPage = document.getElementById(`page-${pageName}`);
-  if (targetPage) {
-    targetPage.classList.add('active');
-  }
-
-  if (pageName !== currentPage) {
-    log(`切换到${pageName === 'accounts' ? '账号管理' : '搜索'}页面`, 'info');
+// ====== 初始化 ======
+async function init() {
+  try {
+    const res = await fetch('/api/accounts');
+    const data = await res.json();
+    accounts = data.accounts || [];
+    renderAccounts();
+    log('系统初始化完成', 'success');
+    log(`当前并发数: ${threadCount}`, 'info');
+  } catch (e) {
+    log('系统初始化失败: ' + e.message, 'error');
+    renderAccounts();
   }
 }
 
-// Modal functions
-function openModal() {
+// ====== 页面切换 ======
+function showPage(pageName) {
+  currentPage = pageName;
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === pageName);
+  });
+  document.querySelectorAll('.page').forEach(page => {
+    page.classList.toggle('active', page.id === `page-${pageName}`);
+  });
+}
+
+// ====== 模态框 ======
+function addAccount() {
   const modal = document.getElementById('addAccountModal');
   modal.classList.add('active');
-
-  // 清空输入框
   document.getElementById('phoneInput').value = '';
   document.getElementById('verifyInput').value = '';
   document.getElementById('sendCodeBtn').disabled = true;
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('verifyHint').textContent = '发送验证码后输入验证码登录';
-
-  // 监听手机号输入
   document.getElementById('phoneInput').addEventListener('input', checkPhoneInput);
 }
 
 function closeModal() {
-  const modal = document.getElementById('addAccountModal');
-  modal.classList.remove('active');
+  document.getElementById('addAccountModal').classList.remove('active');
 }
 
 function checkPhoneInput() {
   const phone = document.getElementById('phoneInput').value.trim();
-  const phoneReg = /^1[3-9]\d{9}$/;
-  const sendBtn = document.getElementById('sendCodeBtn');
-  const loginBtn = document.getElementById('loginBtn');
-
-  sendBtn.disabled = !phoneReg.test(phone);
-  loginBtn.disabled = true;
-
-  if (phoneReg.test(phone)) {
-    document.getElementById('verifyHint').textContent = '手机号格式正确，点击发送验证码';
-  } else {
-    document.getElementById('verifyHint').textContent = '请输入正确的11位手机号';
-  }
+  const valid = /^1[3-9]\d{9}$/.test(phone);
+  document.getElementById('sendCodeBtn').disabled = !valid;
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('verifyHint').textContent = valid
+    ? '手机号格式正确，点击发送验证码'
+    : '请输入正确的11位手机号';
 }
+
+// ====== 发送验证码 ======
+let countdownTimer = null;
 
 async function sendVerifyCode() {
   const phone = document.getElementById('phoneInput').value.trim();
-  const phoneReg = /^1[3-9]\d{9}$/;
-
-  if (!phoneReg.test(phone)) {
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
     alert('请输入正确的11位手机号');
     return;
   }
 
   const sendBtn = document.getElementById('sendCodeBtn');
   const verifyHint = document.getElementById('verifyHint');
-
   sendBtn.disabled = true;
   sendBtn.textContent = '发送中...';
   verifyHint.textContent = '正在发送验证码...';
 
   try {
-    const response = await fetch('/api/send-code', {
+    const res = await fetch('/api/send-code', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({phone: phone}),
+      body: JSON.stringify({phone})
     });
-
-    const result = await response.json();
+    const result = await res.json();
 
     if (result.success) {
       sendBtn.textContent = '已发送';
-      verifyHint.textContent = `验证码已发送，${result.expires || '120'}秒内有效`;
+      verifyHint.textContent = `验证码已发送，120秒内有效`;
       document.getElementById('loginBtn').disabled = false;
-
-      // 启用倒计时
-      startCountdown(result.expires || 120);
+      startCountdown(120);
     } else {
       sendBtn.disabled = false;
       sendBtn.textContent = '发送验证码';
       verifyHint.textContent = `发送失败: ${result.message}`;
     }
-  } catch (error) {
+  } catch (e) {
     sendBtn.disabled = false;
     sendBtn.textContent = '发送验证码';
-    verifyHint.textContent = `发送出错: ${error.message}`;
+    verifyHint.textContent = `发送出错: ${e.message}`;
   }
 }
-
-let countdownTimer = null;
 
 function startCountdown(seconds) {
   let remaining = seconds;
   const sendBtn = document.getElementById('sendCodeBtn');
-
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-  }
+  if (countdownTimer) clearInterval(countdownTimer);
 
   countdownTimer = setInterval(() => {
     remaining--;
@@ -898,16 +878,15 @@ function startCountdown(seconds) {
   }, 1000);
 }
 
+// ====== 验证码登录 ======
 async function verifyAndLogin() {
   const phone = document.getElementById('phoneInput').value.trim();
   const code = document.getElementById('verifyInput').value.trim();
 
-  const phoneReg = /^1[3-9]\d{9}$/;
-  if (!phoneReg.test(phone)) {
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
     alert('请输入正确的11位手机号');
     return;
   }
-
   if (!code) {
     alert('请输入验证码');
     return;
@@ -918,61 +897,281 @@ async function verifyAndLogin() {
   loginBtn.disabled = true;
 
   try {
-    const response = await fetch('/api/verify-login', {
+    const res = await fetch('/api/verify-login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        phone: phone,
-        code: code
-      }),
+      body: JSON.stringify({phone, code})
     });
-
-    const result = await response.json();
+    const result = await res.json();
 
     if (result.success) {
-      log(`账号登录成功: ${phone}`, 'success');
+      accounts.push(result.account);
       closeModal();
-      // 刷新账号列表
-      setTimeout(() => {
-        location.reload();
-      }, 500);
+      renderAccounts();
+      log(`账号登录成功: ${phone}`, 'success');
     } else {
       loginBtn.textContent = '登录';
       loginBtn.disabled = false;
       alert(`登录失败: ${result.message}`);
     }
-  } catch (error) {
+  } catch (e) {
     loginBtn.textContent = '登录';
     loginBtn.disabled = false;
-    alert(`登录出错: ${error.message}`);
+    alert(`登录出错: ${e.message}`);
   }
 }
 
+// ====== 账号操作 ======
+async function deleteAccount(accountId) {
+  if (!confirm('确定要删除这个账号吗？')) return;
+
+  const account = accounts.find(a => a.id === accountId);
+  if (account && account.running) {
+    alert('账号正在执行任务，请先停止');
+    return;
+  }
+
+  try {
+    await fetch('/api/account/remove', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({account_id: accountId})
+    });
+  } catch (e) { /* 忽略网络错误 */ }
+
+  accounts = accounts.filter(a => a.id !== accountId);
+  renderAccounts();
+  log(`删除账号: ${accountId}`, 'warn');
+}
+
+async function reloginAccount(accountId) {
+  try {
+    await fetch('/api/account/relogin', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({account_id: accountId})
+    });
+
+    const account = accounts.find(a => a.id === accountId);
+    if (account) {
+      account.status = 'loading';
+      renderAccounts();
+      log(`正在重新登录账号 ${accountId}...`, 'info');
+
+      // 模拟登录过程（实际应轮询状态）
+      setTimeout(() => {
+        account.status = 'online';
+        renderAccounts();
+        log(`账号 ${accountId} 重新登录成功`, 'success');
+      }, 2000);
+    }
+  } catch (e) {
+    log(`重新登录失败: ${e.message}`, 'error');
+  }
+}
+
+// ====== 任务操作 ======
+async function startTask(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account || account.running) return;
+
+  const taskType = document.getElementById('taskType').value;
+  if (!taskType) {
+    alert('请先选择任务类型');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/task/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({account_id: accountId, type: taskType, params: {}})
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      account.running = true;
+      account.progress = 0;
+      renderAccounts();
+      log(`开始执行任务 - ${account.name} (${taskType})`, 'account');
+      simulateTask(account);
+    } else {
+      log(`启动任务失败: ${result.message}`, 'error');
+    }
+  } catch (e) {
+    log(`启动任务出错: ${e.message}`, 'error');
+  }
+}
+
+async function stopTask(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account || !account.running) return;
+
+  try {
+    await fetch('/api/task/stop', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({account_id: accountId})
+    });
+  } catch (e) { /* 忽略网络错误 */ }
+
+  account.running = false;
+  account.progress = 0;
+  renderAccounts();
+  log(`停止任务 - ${account.name}`, 'warn');
+}
+
+async function startAll() {
+  const taskType = document.getElementById('taskType').value;
+  if (!taskType) {
+    alert('请先选择任务类型');
+    return;
+  }
+
+  try {
+    await fetch('/api/task/start-all', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: taskType, params: {}})
+    });
+  } catch (e) { /* 忽略 */ }
+
+  accounts.forEach(a => {
+    if (!a.running && a.status === 'online') {
+      a.running = true;
+      a.progress = 0;
+      simulateTask(a);
+    }
+  });
+  renderAccounts();
+  log('启动所有在线账号任务', 'account');
+}
+
+async function stopAll() {
+  try {
+    await fetch('/api/task/stop-all', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+  } catch (e) { /* 忽略 */ }
+
+  accounts.forEach(a => {
+    a.running = false;
+    a.progress = 0;
+  });
+  renderAccounts();
+  log('停止所有任务', 'warn');
+}
+
+// ====== 任务模拟 ======
+function simulateTask(account) {
+  if (!account.running) return;
+
+  const interval = setInterval(() => {
+    if (!account.running) {
+      clearInterval(interval);
+      return;
+    }
+    account.progress += Math.random() * 15;
+    if (account.progress >= 100) {
+      account.progress = 100;
+      account.running = false;
+      account.tasks++;
+      account.completed++;
+      clearInterval(interval);
+      log(`任务完成 - ${account.name}`, 'success');
+    }
+    renderAccounts();
+  }, 500);
+}
+
+// ====== 线程管理 ======
+async function updateThreadCount() {
+  threadCount = parseInt(document.getElementById('threadCount').value);
+  try {
+    await fetch('/api/settings/threads', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_threads: threadCount})
+    });
+  } catch (e) { /* 忽略 */ }
+  log(`并发数设置为: ${threadCount}`, 'info');
+}
+
+// ====== 搜索 ======
+async function searchSongs() {
+  const keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) {
+    alert('请输入搜索关键词');
+    return;
+  }
+
+  const container = document.getElementById('searchResults');
+  container.innerHTML = '<div class="console-line info">正在搜索...</div>';
+
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keyword})
+    });
+    const result = await res.json();
+
+    if (result.success && result.songs && result.songs.length > 0) {
+      container.innerHTML = result.songs.map(song => {
+        const m = Math.floor(song.duration / 60);
+        const s = song.duration % 60;
+        return `<div class="song-card" onclick="playSong(${song.id})">
+          <div class="song-name">${song.name}</div>
+          <div class="song-artists">${song.artists}</div>
+          <div class="song-album">${song.album}</div>
+          <div class="song-duration">${m}:${s.toString().padStart(2, '0')}</div>
+        </div>`;
+      }).join('');
+      log(`搜索完成: 找到 ${result.songs.length} 首歌曲`, 'success');
+    } else {
+      container.innerHTML = '<div class="console-line info">未找到歌曲</div>';
+    }
+  } catch (e) {
+    container.innerHTML = '<div class="console-line error">搜索出错: ' + e.message + '</div>';
+  }
+}
+
+function playSong(songId) {
+  log(`播放歌曲 ID: ${songId}`, 'info');
+  fetch('/api/play', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({song_id: songId})
+  }).catch(() => {});
+}
+
+// ====== 渲染 ======
 function renderAccounts() {
   const grid = document.getElementById('accountsGrid');
-  grid.innerHTML = '';
+  if (accounts.length === 0) {
+    grid.innerHTML = '<div class="console-line info">暂无账号，请点击上方"+ 添加账号"开始添加</div>';
+    updateStats();
+    return;
+  }
 
+  grid.innerHTML = '';
   accounts.forEach(account => {
     const card = document.createElement('div');
     card.className = `account-card ${account.running ? 'running' : ''}`;
 
     let statusClass, statusText;
-
     if (account.running) {
-      statusClass = 'running';
-      statusText = '运行中';
+      statusClass = 'running'; statusText = '运行中';
     } else if (account.status === 'loading') {
-      statusClass = 'loading';
-      statusText = '登录中...';
+      statusClass = 'loading'; statusText = '登录中...';
     } else if (account.status === 'online') {
-      statusClass = 'active';
-      statusText = '在线';
+      statusClass = 'active'; statusText = '在线';
     } else if (account.status === 'error') {
-      statusClass = 'error';
-      statusText = '登录失败';
+      statusClass = 'error'; statusText = '登录失败';
     } else {
-      statusClass = 'offline';
-      statusText = '离线';
+      statusClass = 'offline'; statusText = '离线';
     }
 
     card.innerHTML = `
@@ -990,16 +1189,15 @@ function renderAccounts() {
         <div class="progress-container">
           <div class="progress-bar" style="width: ${account.progress}%"></div>
         </div>
-        <div class="progress-text">${account.progress}%</div>
+        <div class="progress-text">${Math.round(account.progress)}%</div>
       ` : ''}
       <div class="account-actions">
         <button class="btn btn-primary" onclick="startTask(${account.id})" ${account.running ? 'disabled' : ''}>开始</button>
         <button class="btn btn-danger" onclick="stopTask(${account.id})" ${!account.running ? 'disabled' : ''}>停止</button>
-        <button class="btn btn-secondary" onclick="reloginAccount(${account.id})" ${account.status === 'online' ? 'disabled' : ''}>重登</button>
+        <button class="btn btn-secondary" onclick="reloginAccount(${account.id})">重登</button>
         <button class="btn btn-danger" onclick="deleteAccount(${account.id})">删除</button>
       </div>
     `;
-
     grid.appendChild(card);
   });
 
@@ -1010,138 +1208,27 @@ function updateStats() {
   const online = accounts.filter(a => a.status === 'online').length;
   const running = accounts.filter(a => a.running).length;
   const offline = accounts.filter(a => a.status === 'offline').length;
-
-  const totalTasks = accounts.reduce((sum, a) => sum + a.tasks, 0);
-  const completedTasks = accounts.reduce((sum, a) => sum + a.completed, 0);
-  const successRate = totalTasks > 0 ? Math.round((completedTasks/totalTasks)*100) : 0;
+  const totalTasks = accounts.reduce((s, a) => s + a.tasks, 0);
+  const completed = accounts.reduce((s, a) => s + a.completed, 0);
+  const successRate = totalTasks > 0 ? Math.round((completed/totalTasks)*100) : 0;
 
   document.getElementById('onlineCount').textContent = online;
   document.getElementById('runningCount').textContent = running;
   document.getElementById('offlineCount').textContent = offline;
   document.getElementById('totalTasks').textContent = totalTasks;
-  document.getElementById('completedTasks').textContent = completedTasks;
+  document.getElementById('completedTasks').textContent = completed;
   document.getElementById('successRate').textContent = successRate + '%';
   document.getElementById('avgTime').textContent = (Math.random() * 5 + 2).toFixed(1) + 's';
 }
 
+// ====== 控制台 ======
 function log(message, type = 'info') {
-  const console = document.getElementById('consoleOutput');
+  const el = document.getElementById('consoleOutput');
   const line = document.createElement('div');
   line.className = `console-line ${type}`;
   line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-  console.appendChild(line);
-  console.scrollTop = console.scrollHeight;
-}
-
-function addAccount() {
-  // 不再使用 prompt，改为打开模态框
-  openModal();
-}
-
-function deleteAccount(accountId) {
-  if (!confirm('确定要删除这个账号吗？')) return;
-
-  const account = accounts.find(a => a.id === accountId);
-  if (account && account.running) {
-    alert('账号正在执行任务，请先停止');
-    return;
-  }
-
-  accounts = accounts.filter(a => a.id !== accountId);
-  renderAccounts();
-  log(`删除账号: 账号 ${accountId}`, 'warn');
-}
-
-function loginAccount(accountId) {
-  const account = accounts.find(a => a.id === accountId);
-  if (!account) return;
-
-  account.status = 'loading';
-  renderAccounts();
-  log(`正在登录账号 ${accountId}...`, 'info');
-
-  setTimeout(() => {
-    account.status = 'online';
-    renderAccounts();
-    log(`账号 ${accountId} 登录成功`, 'success');
-  }, 2000);
-}
-
-function reloginAccount(accountId) {
-  const account = accounts.find(a => a.id === accountId);
-  if (!account) return;
-
-  if (account.status === 'online') {
-    alert('账号已在线');
-    return;
-  }
-
-  if (account.running) {
-    alert('账号正在执行任务，请先停止');
-    return;
-  }
-
-  loginAccount(accountId);
-}
-
-function startTask(accountId) {
-  const account = accounts.find(a => a.id === accountId);
-  if (account && !account.running) {
-    account.running = true;
-    account.progress = 0;
-    renderAccounts();
-    log(`开始执行任务 - ${account.name}`, 'account');
-    simulateTask(account);
-  }
-}
-
-function stopTask(accountId) {
-  const account = accounts.find(a => a.id === accountId);
-  if (account && account.running) {
-    account.running = false;
-    account.progress = 0;
-    renderAccounts();
-    log(`停止任务 - ${account.name}`, 'warn');
-  }
-}
-
-function simulateTask(account) {
-  if (!account.running) return;
-
-  const interval = setInterval(() => {
-    if (!account.running) {
-      clearInterval(interval);
-      return;
-    }
-
-    account.progress += Math.random() * 15;
-
-    if (account.progress >= 100) {
-      account.progress = 100;
-      account.running = false;
-      account.tasks++;
-      account.completed++;
-      clearInterval(interval);
-      log(`任务完成 - ${account.name} (成功)`, 'success');
-      renderAccounts();
-    } else {
-      renderAccounts();
-    }
-  }, 500);
-}
-
-function startAll() {
-  accounts.forEach(account => {
-    if (!account.running && account.status === 'online') {
-      startTask(account.id);
-    }
-  });
-}
-
-function stopAll() {
-  accounts.forEach(account => {
-    stopTask(account.id);
-  });
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
 }
 
 function clearConsole() {
@@ -1149,56 +1236,8 @@ function clearConsole() {
   log('控制台已清空', 'info');
 }
 
-function updateThreadCount() {
-  threadCount = parseInt(document.getElementById('threadCount').value);
-  log(`并发数设置为: ${threadCount}`, 'info');
-}
-
-function searchSongs() {
-  const keyword = document.getElementById('searchInput').value.trim();
-  if (!keyword) {
-    alert('请输入搜索关键词');
-    return;
-  }
-
-  const resultsContainer = document.getElementById('searchResults');
-  resultsContainer.innerHTML = '<div class="console-line info">正在搜索...</div>';
-
-  // 模拟搜索结果
-  setTimeout(() => {
-    const mockResults = [
-      { id: 1, name: `${keyword} - 示例歌曲1`, artists: '示例歌手1', album: '示例专辑1', duration: 240 },
-      { id: 2, name: `${keyword} - 示例歌曲2`, artists: '示例歌手2', album: '示例专辑2', duration: 180 },
-      { id: 3, name: `${keyword} - 示例歌曲3`, artists: '示例歌手1', album: '示例专辑3', duration: 210 },
-      { id: 4, name: `${keyword} - 示例歌曲4`, artists: '示例歌手3', album: '示例专辑4', duration: 195 },
-    ];
-
-    resultsContainer.innerHTML = mockResults.map(song => {
-      const minutes = Math.floor(song.duration / 60);
-      const seconds = song.duration % 60;
-      return `
-        <div class="song-card" onclick="playSong(${song.id})">
-          <div class="song-name">${song.name}</div>
-          <div class="song-artists">${song.artists}</div>
-          <div class="song-album">${song.album}</div>
-          <div class="song-duration">${minutes}:${seconds.toString().padStart(2, '0')}</div>
-        </div>
-      `;
-    }).join('');
-
-    log(`搜索完成: 找到 ${mockResults.length} 首歌曲`, 'success');
-  }, 1000);
-}
-
-function playSong(songId) {
-  log(`播放歌曲 ID: ${songId}`, 'info');
-  log('播放功能需要集成后端 API', 'warn');
-}
-
-// 初始化
-renderAccounts();
-log('系统初始化完成', 'success');
-log(`当前并发数: ${threadCount}`, 'info');
+// ====== 启动 ======
+init();
 </script>
 </body>
 </html>

@@ -112,6 +112,31 @@ def _get_cookies_dict():
 
 # ---------- 登录 ----------
 
+def send_sms_code(phone, countrycode="86"):
+    """仅发送短信验证码，不等待输入"""
+    session = requests.Session()
+    result = _api_post(
+        "https://music.163.com/weapi/sms/captcha/sent",
+        {"cellphone": phone, "ctcode": countrycode},
+        session=session,
+    )
+    if result.get("code") == 200:
+        print("验证码已发送，请查收短信")
+        return True
+    return False
+
+def login_with_captcha(phone, captcha, countrycode="86"):
+    """使用手机号+验证码登录"""
+    session = requests.Session()
+    data = {"phone": phone, "countrycode": countrycode, "captcha": captcha, "rememberLogin": "true"}
+    result = _api_post("https://music.163.com/weapi/login/cellphone", data, session=session)
+    if result.get("code") == 200:
+        _save_cookies(session)
+        nickname = result.get("profile", {}).get("nickname", phone)
+        print(f"登录成功 - {nickname}")
+        return True
+    return False
+
 def login_cellphone(phone, password=None, countrycode="86", skip_captcha=False):
     session = requests.Session()
 
