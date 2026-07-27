@@ -65,7 +65,7 @@ def _encrypt_params(data):
     return {"params": params, "encSecKey": enc_sec_key}
 
 
-def _api_post(url, data, cookies=None):
+def _api_post(url, data, cookies=None, session=None):
     headers = {
         "User-Agent": random.choice(USER_AGENTS),
         "Referer": "https://music.163.com",
@@ -73,7 +73,10 @@ def _api_post(url, data, cookies=None):
     }
     encrypted = _encrypt_params(data)
     try:
-        resp = requests.post(url, data=encrypted, headers=headers, cookies=cookies, timeout=15)
+        if session is not None:
+            resp = session.post(url, data=encrypted, headers=headers, timeout=15)
+        else:
+            resp = requests.post(url, data=encrypted, headers=headers, cookies=cookies, timeout=15)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -105,7 +108,7 @@ def login_cellphone(phone, password=None, countrycode="86"):
     if password:
         md5_pwd = _md5(password)
         data = {"phone": phone, "countrycode": countrycode, "password": md5_pwd, "rememberLogin": "true"}
-        result = _api_post("https://music.163.com/weapi/login/cellphone", data, cookies=session.cookies)
+        result = _api_post("https://music.163.com/weapi/login/cellphone", data, session=session)
         if result.get("code") == 200:
             _save_cookies(session)
             nickname = result.get("profile", {}).get("nickname", phone)
@@ -117,6 +120,7 @@ def login_cellphone(phone, password=None, countrycode="86"):
     result = _api_post(
         "https://music.163.com/weapi/sms/captcha/sent",
         {"cellphone": phone, "ctcode": countrycode},
+        session=session,
     )
     if result.get("code") != 200:
         sys.exit(f"发送验证码失败: {result}")
@@ -129,7 +133,7 @@ def login_cellphone(phone, password=None, countrycode="86"):
         "captcha": captcha,
         "rememberLogin": "true",
     }
-    result = _api_post("https://music.163.com/weapi/login/cellphone", data, cookies=session.cookies)
+    result = _api_post("https://music.163.com/weapi/login/cellphone", data, session=session)
     if result.get("code") == 200:
         _save_cookies(session)
         nickname = result.get("profile", {}).get("nickname", phone)
@@ -142,7 +146,7 @@ def login_email(email, password):
     session = requests.Session()
     md5_pwd = _md5(password)
     data = {"username": email, "password": md5_pwd, "rememberLogin": "true"}
-    result = _api_post("https://music.163.com/weapi/login", data, cookies=session.cookies)
+    result = _api_post("https://music.163.com/weapi/login", data, session=session)
     if result.get("code") == 200:
         _save_cookies(session)
         nickname = result.get("profile", {}).get("nickname", email)
@@ -154,7 +158,7 @@ def login_email(email, password):
 def login_qr():
     session = requests.Session()
 
-    key_data = _api_post("https://music.163.com/weapi/login/qrcode/unikey", {"type": "1"})
+    key_data = _api_post("https://music.163.com/weapi/login/qrcode/unikey", {"type": "1"}, session=session)
     unikey = key_data.get("unikey")
     if not unikey:
         sys.exit(f"获取二维码 key 失败: {key_data}")
@@ -175,7 +179,7 @@ def login_qr():
         result = _api_post(
             "https://music.163.com/weapi/login/qrcode/client/login",
             {"key": unikey, "type": "1"},
-            cookies=session.cookies,
+            session=session,
         )
         code = result.get("code") if isinstance(result, dict) else -1
         if code == 800:
@@ -534,7 +538,12 @@ def _download_audio(url, title=""):
     import re
     safe = "".join(c for c in title if c.isalnum() or c in " _-()") or "song"
     safe = re.sub(r"[^a-zA-Z0-9_\-\s\(\)]", "", safe).strip()[:50]
-    filepath = Path(f"/tmp/{safe}.mp3") if safe else Path("/tmp/song.mp3")
+    if not safe:
+        safe = f"song_{int(time.time())}"
+    filepath = Path(f"/tmp/{safe}.mp3")
+    # 防止重复覆盖
+    if filepath.exists():
+        filepath = Path(f"/tmp/{safe}_{int(time.time()*1000)%10000}.mp3")
     try:
         resp = requests.get(url, stream=True, timeout=60)
         resp.raise_for_status()
