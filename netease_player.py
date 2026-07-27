@@ -124,7 +124,7 @@ def login_cellphone(phone, password=None, countrycode="86", skip_captcha=False):
             nickname = result.get("profile", {}).get("nickname", phone)
             print(f"登录成功 - {nickname}")
             return session
-        sys.exit(f"登录失败 [{result.get('code')}]: {result.get('message', result)}")
+        return False
 
     result = _api_post(
         "https://music.163.com/weapi/sms/captcha/sent",
@@ -132,11 +132,11 @@ def login_cellphone(phone, password=None, countrycode="86", skip_captcha=False):
         session=session,
     )
     if result.get("code") != 200:
-        sys.exit(f"发送验证码失败: {result}")
+        return False
 
     print("验证码已发送，请查收短信")
     if skip_captcha:
-        sys.exit("需要验证码登录，但未提供验证码")
+        return False
 
     captcha = input("请输入短信验证码: ").strip()
     data = {"phone": phone, "countrycode": countrycode, "captcha": captcha, "rememberLogin": "true"}
@@ -146,7 +146,7 @@ def login_cellphone(phone, password=None, countrycode="86", skip_captcha=False):
         nickname = result.get("profile", {}).get("nickname", phone)
         print(f"登录成功 - {nickname}")
         return session
-    sys.exit(f"登录失败 [{result.get('code')}]: {result.get('message', result)}")
+    return False
 
 
 def login_email(email, password):

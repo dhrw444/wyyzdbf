@@ -355,7 +355,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             from netease_player import login_cellphone
             result = login_cellphone(phone, password=None, skip_captcha=True)
-            if result:
+            if result is not False:
                 self._send_json({
                     "success": True,
                     "message": "验证码已发送",
@@ -364,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send_json({
                     "success": False,
-                    "message": "发送验证码失败"
+                    "message": "发送验证码失败，请检查手机号是否正确"
                 }, 400)
         except Exception as e:
             self._send_json({
@@ -383,11 +383,23 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "请填写手机号和验证码"}, 400)
             return
 
+        # 验证手机号格式
+        import re
+        phone_reg = r'^1[3-9]\d{9}$'
+        if not re.match(phone_reg, phone):
+            self._send_json({"success": False, "message": "手机号格式不正确"}, 400)
+            return
+
+        # 验证验证码格式
+        if not re.match(r'^\d{6}$', code):
+            self._send_json({"success": False, "message": "验证码格式不正确"}, 400)
+            return
+
         # 直接调用login_cellphone函数进行验证码登录
         try:
             from netease_player import login_cellphone
             result = login_cellphone(phone, password=code)
-            if result:
+            if result is not False:
                 # 获取用户信息
                 new_id = max(task_manager['accounts'].keys(), default=0) + 1
                 account = Account(
@@ -407,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send_json({
                     "success": False,
-                    "message": "验证码验证失败"
+                    "message": "验证码错误或账号不存在"
                 }, 400)
         except Exception as e:
             self._send_json({
