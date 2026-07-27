@@ -24,11 +24,12 @@ task_manager = {
 }
 
 class Account:
-    def __init__(self, id, name, phone, status='online'):
+    def __init__(self, id, name, phone, password='', status='offline'):
         self.id = id
         self.name = name
         self.phone = phone
-        self.status = status  # online, offline, error
+        self.password = password
+        self.status = status  # online, offline, loading, error
         self.tasks = 0
         self.completed = 0
         self.failed = 0
@@ -183,15 +184,36 @@ class Handler(BaseHTTPRequestHandler):
         account = Account(
             id=new_id,
             name=data.get('name', f'账号 {new_id}'),
-            phone=data.get('phone', f'138****{str(new_id).zfill(4)}'),
-            status='online'
+            phone=data.get('phone', ''),
+            password=data.get('password', ''),
+            status='offline'
         )
         task_manager['accounts'][new_id] = account
+
+        # 自动执行登录
+        self.login_account(new_id, account.password)
 
         self._send_json({
             "success": True,
             "account": self.account_to_dict(account)
         })
+
+    def login_account(self, account_id, password):
+        """执行账号登录"""
+        account = task_manager['accounts'].get(account_id)
+        if not account:
+            return False
+
+        account.status = 'loading'
+        result = run_cmd(['login', '-p', account.phone, '-P', password])
+
+        if result['success']:
+            account.status = 'online'
+            return True
+        else:
+            account.status = 'error'
+            account.last_error = result.get('output', '登录失败')
+            return False
 
     def handle_remove_account(self):
         """删除账号"""
@@ -225,6 +247,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "账号正在执行任务"}, 400)
             return
 
+        if account.status != 'online':
+            self._send_json({"success": False, "message": "账号未在线，请先登录"}, 400)
+            return
+
         self.start_account_task(account_id, command)
         self._send_json({"success": True, "message": f"任务已启动 - 账号 {account_id}"})
 
@@ -255,9 +281,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.start_account_task(account_id, command)
                 started.append(account_id)
 
+        if not started:
+            message = "没有可执行的账号（请确保账号在线且未在执行中）"
+        else:
+            message = f"已启动 {len(started)} 个账号的任务"
+
         self._send_json({
             "success": True,
-            "message": f"已启动 {len(started)} 个账号的任务",
+            "message": message,
             "started": started
         })
 
@@ -465,10 +496,10 @@ def parse_chinese_command(cmd_str):
 def init_demo_accounts():
     """初始化演示账号"""
     demo_accounts = [
-        {'name': '账号 1', 'phone': '138****8001', 'status': 'online'},
-        {'name': '账号 2', 'phone': '138****8002', 'status': 'online'},
-        {'name': '账号 3', 'phone': '138****8003', 'status': 'online'},
-        {'name': '账号 4', 'phone': '138****8004', 'status': 'online'},
+        {'name': '账号 1', 'phone': '138****8001', 'password': '', 'status': 'offline'},
+        {'name': '账号 2', 'phone': '138****8002', 'password': '', 'status': 'offline'},
+        {'name': '账号 3', 'phone': '138****8003', 'password': '', 'status': 'offline'},
+        {'name': '账号 4', 'phone': '138****8004', 'password': '', 'status': 'offline'},
     ]
 
     for idx, acc_data in enumerate(demo_accounts, 1):
@@ -476,6 +507,7 @@ def init_demo_accounts():
             id=idx,
             name=acc_data['name'],
             phone=acc_data['phone'],
+            password=acc_data['password'],
             status=acc_data['status']
         )
         task_manager['accounts'][idx] = account
@@ -493,8 +525,10 @@ def main():
     server = HTTPServer(("0.0.0.0", port), Handler)
     print(f"🚀 多账号任务执行平台已启动")
     print(f"🌐 访问地址: http://0.0.0.0:{port}")
-    print(f"⚡ 最大线程数: {task_manager['max_threads']}")
+    print(f"⚡ 最大并发数: {task_manager['max_threads']}")
     print(f"📊 当前账号数: {len(task_manager['accounts'])}")
+    print(f"💡 请添加账号并登录后使用")
+    print(f"🔧 并发数说明: 1=单线程, 4=标准, 16=极限")
 
     try:
         server.serve_forever()

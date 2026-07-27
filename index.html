@@ -566,16 +566,16 @@
         <button class="btn btn-primary" onclick="startAll()">全部开始</button>
         <button class="btn btn-danger" onclick="stopAll()">全部停止</button>
       </div>
-      <div class="control-group">
-        <label>线程数:</label>
-        <select id="threadCount" onchange="updateThreadCount()">
-          <option value="1">1 线程</option>
-          <option value="2">2 线程</option>
-          <option value="4" selected>4 线程</option>
-          <option value="8">8 线程</option>
-          <option value="16">16 线程</option>
-        </select>
-      </div>
+    <div class="control-group">
+      <label>并发数:</label>
+      <select id="threadCount" onchange="updateThreadCount()">
+        <option value="1" title="1个账号同时执行任务">1 (单线程)</option>
+        <option value="2" title="2个账号同时执行任务">2 (低并发)</option>
+        <option value="4" selected title="4个账号同时执行任务">4 (标准并发)</option>
+        <option value="8" title="8个账号同时执行任务">8 (高并发)</option>
+        <option value="16" title="16个账号同时执行任务">16 (极限并发)</option>
+      </select>
+    </div>
       <div class="control-group">
         <label>任务类型:</label>
         <select id="taskType" onchange="updateTaskType()">
@@ -638,8 +638,24 @@ function renderAccounts() {
     const card = document.createElement('div');
     card.className = `account-card ${account.running ? 'running' : ''}`;
 
-    const statusClass = account.running ? 'running' : account.status;
-    const statusText = account.running ? '运行中' : (account.status === 'online' ? '在线' : '离线');
+    let statusClass, statusText;
+
+    if (account.running) {
+      statusClass = 'running';
+      statusText = '运行中';
+    } else if (account.status === 'loading') {
+      statusClass = 'loading';
+      statusText = '登录中...';
+    } else if (account.status === 'online') {
+      statusClass = 'active';
+      statusText = '在线';
+    } else if (account.status === 'error') {
+      statusClass = 'error';
+      statusText = '登录失败';
+    } else {
+      statusClass = 'offline';
+      statusText = '离线';
+    }
 
     card.innerHTML = `
       <div class="account-header">
@@ -661,7 +677,8 @@ function renderAccounts() {
       <div class="account-actions">
         <button class="btn btn-primary" onclick="startTask(${account.id})" ${account.running ? 'disabled' : ''}>开始</button>
         <button class="btn btn-danger" onclick="stopTask(${account.id})" ${!account.running ? 'disabled' : ''}>停止</button>
-        <button class="btn btn-secondary" onclick="viewDetails(${account.id})">详情</button>
+        <button class="btn btn-secondary" onclick="reloginAccount(${account.id})" ${account.status === 'online' ? 'disabled' : ''}>重登</button>
+        <button class="btn btn-danger" onclick="deleteAccount(${account.id})">删除</button>
       </div>
     `;
 
@@ -699,19 +716,75 @@ function log(message, type = 'info') {
 }
 
 function addAccount() {
+  const phone = prompt('请输入手机号:');
+  if (!phone) return;
+
+  const password = prompt('请输入密码:');
+  if (!password) return;
+
   const newId = Math.max(...accounts.map(a => a.id)) + 1;
   accounts.push({
     id: newId,
     name: `账号 ${newId}`,
-    phone: `138****${String(newId).padStart(4, '0')}`,
-    status: 'online',
+    phone: phone,
+    password: password,
+    status: 'offline',
     tasks: 0,
     completed: 0,
     progress: 0,
     running: false
   });
   renderAccounts();
-  log(`添加新账号: 账号 ${newId}`, 'success');
+  log(`添加新账号: 账号 ${newId} (${phone})`, 'success');
+  // 自动登录
+  loginAccount(newId);
+}
+
+function deleteAccount(accountId) {
+  if (!confirm('确定要删除这个账号吗？')) return;
+
+  const account = accounts.find(a => a.id === accountId);
+  if (account && account.running) {
+    alert('账号正在执行任务，请先停止');
+    return;
+  }
+
+  accounts = accounts.filter(a => a.id !== accountId);
+  renderAccounts();
+  log(`删除账号: 账号 ${accountId}`, 'warn');
+}
+
+function loginAccount(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account) return;
+
+  account.status = 'loading';
+  renderAccounts();
+  log(`正在登录账号 ${accountId}...`, 'info');
+
+  // 模拟登录
+  setTimeout(() => {
+    account.status = 'online';
+    renderAccounts();
+    log(`账号 ${accountId} 登录成功`, 'success');
+  }, 2000);
+}
+
+function reloginAccount(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account) return;
+
+  if (account.status === 'online') {
+    alert('账号已在线');
+    return;
+  }
+
+  if (account.running) {
+    alert('账号正在执行任务，请先停止');
+    return;
+  }
+
+  loginAccount(accountId);
 }
 
 function startTask(accountId) {
@@ -804,7 +877,17 @@ function executeCommand() {
 
 function updateThreadCount() {
   threadCount = parseInt(document.getElementById('threadCount').value);
-  log(`线程数设置为: ${threadCount}`, 'info');
+  log(`并发数设置为: ${threadCount} (${threadCount}个账号可同时执行任务)`, 'info');
+
+  // 显示线程说明
+  const explanations = {
+    1: '单线程模式 - 适合测试和调试，一次只执行一个账号任务',
+    2: '低并发模式 - 适合轻量级任务，2个账号同时执行',
+    4: '标准并发模式 - 平衡性能和资源使用，4个账号同时执行',
+    8: '高并发模式 - 适合大量账号，8个账号同时执行',
+    16: '极限并发模式 - 最大并发，16个账号同时执行'
+  };
+  log(`💡 ${explanations[threadCount]}`, 'info');
 }
 
 function updateTaskType() {
