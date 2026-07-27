@@ -659,6 +659,35 @@ def stats_daily(artist_filter=None, cookies=None):
     return _print_stats(filtered, playable, unplayable, label)
 
 
+def artist_play(artist_name, max_results=50, cookies=None):
+    """指定歌手, 搜索并返回可播放歌曲列表(跳过统计打印)"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    print(f"\n搜索歌手: {artist_name} ...")
+    songs = search_all_songs(artist_name, max_results, cookies)
+    if not songs:
+        print("未找到歌曲")
+        return None
+
+    # 只保留该歌手的歌
+    kw = artist_name.lower()
+    artist_songs = [s for s in songs if kw in s.get("artists", "").lower()]
+    if not artist_songs:
+        print(f"搜索结果中未找到歌手 '{artist_name}' 的歌曲")
+        return None
+
+    print(f"找到 {len(artist_songs)} 首, 正在检测可播放性...")
+    playable, _ = _check_playable_batch(artist_songs, cookies)
+    if not playable:
+        print("没有可播放的歌曲")
+        return None
+
+    total_dur = sum(s["duration"] for s in playable)
+    m, s = divmod(total_dur, 60)
+    print(f"可播放: {len(playable)} 首, 总时长 {m}分{s}秒")
+    return playable
+
+
 # ---------- CLI ----------
 
 def main():
@@ -679,6 +708,9 @@ def main():
   python netease_player.py stats-playlist 123456 -a 周杰伦  # 歌单中某歌手统计
   python netease_player.py stats-daily                      # 每日推荐统计
   python netease_player.py stats-daily -a 周杰伦             # 每日推荐中某歌手统计
+  python netease_player.py artist 周杰伦                      # 指定歌手，交互选歌播放
+  python netease_player.py artist 周杰伦 --play-n 10          # 播放周杰伦 10 首
+  python netease_player.py artist 周杰伦 --play-min 30        # 播放周杰伦 30 分钟
   python netease_player.py playlist                          # 浏览歌单
   python netease_player.py daily                             # 每日推荐
   python netease_player.py play --id 123456                  # 按ID播放
@@ -728,6 +760,12 @@ def main():
     p_sd.add_argument("-a", "--artist", help="按歌手名过滤")
     p_sd.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
     p_sd.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
+
+    p_artist = sub_cmd.add_parser("artist", help="指定歌手播放作品")
+    p_artist.add_argument("artist_name", help="歌手名")
+    p_artist.add_argument("-n", "--max", type=int, default=50, help="最大搜索数量")
+    p_artist.add_argument("--play-n", type=int, default=0, metavar="N", help="播放前 N 首")
+    p_artist.add_argument("--play-min", type=int, default=0, metavar="M", help="播放 M 分钟")
 
     args = parser.parse_args()
 
@@ -856,6 +894,19 @@ def main():
             play_n_minutes(result["playable"], args.play_min)
         else:
             song = pick_song(result["playable"])
+            if song:
+                play_audio(song["url"], f"{song['name']} - {song['artists']}")
+
+    elif args.cmd == "artist":
+        songs = artist_play(args.artist_name, args.max, cookies)
+        if songs is None:
+            return
+        if args.play_n > 0:
+            play_n_songs(songs, args.play_n)
+        elif args.play_min > 0:
+            play_n_minutes(songs, args.play_min)
+        else:
+            song = pick_song(songs)
             if song:
                 play_audio(song["url"], f"{song['name']} - {song['artists']}")
 
