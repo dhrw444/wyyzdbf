@@ -112,7 +112,7 @@ def _get_cookies_dict():
 
 # ---------- 登录 ----------
 
-def login_cellphone(phone, password=None, countrycode="86"):
+def login_cellphone(phone, password=None, countrycode="86", skip_captcha=False):
     session = requests.Session()
 
     if password:
@@ -135,6 +135,9 @@ def login_cellphone(phone, password=None, countrycode="86"):
         sys.exit(f"发送验证码失败: {result}")
 
     print("验证码已发送，请查收短信")
+    if skip_captcha:
+        sys.exit("需要验证码登录，但未提供验证码")
+
     captcha = input("请输入短信验证码: ").strip()
     data = {"phone": phone, "countrycode": countrycode, "captcha": captcha, "rememberLogin": "true"}
     result = _api_post("https://music.163.com/weapi/login/cellphone", data, session=session)

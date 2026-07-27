@@ -351,19 +351,25 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "手机号格式不正确"}, 400)
             return
 
-        # 调用 netease_player.py 发送验证码
-        result = run_command(['login', '-p', phone, '--sms'])
-
-        if result['success'] and "验证码已发送" in result.get('output', ''):
-            self._send_json({
-                "success": True,
-                "message": "验证码已发送",
-                "expires": 120
-            })
-        else:
+        # 直接调用login_cellphone函数发送验证码
+        try:
+            from netease_player import login_cellphone
+            result = login_cellphone(phone, password=None, skip_captcha=True)
+            if result:
+                self._send_json({
+                    "success": True,
+                    "message": "验证码已发送",
+                    "expires": 120
+                })
+            else:
+                self._send_json({
+                    "success": False,
+                    "message": "发送验证码失败"
+                }, 400)
+        except Exception as e:
             self._send_json({
                 "success": False,
-                "message": "发送验证码失败: " + result.get('output', '未知错误')
+                "message": "发送验证码失败: " + str(e)
             }, 400)
 
     def handle_verify_login(self):
@@ -377,59 +383,51 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "请填写手机号和验证码"}, 400)
             return
 
-        # 验证码登录
-        result = run_command(['login', '-p', phone, '--sms'])
+        # 直接调用login_cellphone函数进行验证码登录
+        try:
+            from netease_player import login_cellphone
+            result = login_cellphone(phone, password=code)
+            if result:
+                # 获取用户信息
+                new_id = max(task_manager['accounts'].keys(), default=0) + 1
+                account = Account(
+                    id=new_id,
+                    name=f'账号 {new_id}',
+                    phone=phone,
+                    password='',
+                    status='online'
+                )
+                task_manager['accounts'][new_id] = account
 
-        if result['success']:
-            # 获取用户信息
-            new_id = max(task_manager['accounts'].keys(), default=0) + 1
-            account = Account(
-                id=new_id,
-                name=f'账号 {new_id}',
-                phone=phone,
-                password='',
-                status='online'
-            )
-            task_manager['accounts'][new_id] = account
-
-            self._send_json({
-                "success": True,
-                "message": "登录成功",
-                "account": self.account_to_dict(account)
-            })
-        else:
+                self._send_json({
+                    "success": True,
+                    "message": "登录成功",
+                    "account": self.account_to_dict(account)
+                })
+            else:
+                self._send_json({
+                    "success": False,
+                    "message": "验证码验证失败"
+                }, 400)
+        except Exception as e:
             self._send_json({
                 "success": False,
-                "message": "验证码验证失败: " + result.get('output', '验证码错误')
+                "message": "验证码验证失败: " + str(e)
             }, 400)
-        """处理歌曲搜索"""
+
+    def handle_search(self):
+        """处理搜索请求"""
         length = int(self.headers.get("Content-Length", 0))
         data = json.loads(self.rfile.read(length).decode("utf-8"))
-        keyword = data.get("keyword", "").strip()
+        keyword = data.get("keyword", "")
 
         if not keyword:
-            self._send_json({"success": False, "message": "请输入搜索关键词"}, 400)
-            return
-
-        # 获取第一个在线账号的cookies进行搜索
-        online_account = None
-        for account in task_manager['accounts'].values():
-            if account.status == 'online':
-                online_account = account
-                break
-
-        if not online_account:
-            self._send_json({"success": False, "message": "没有在线账号可用，请先登录账号"}, 400)
+            self._send_json({"success": False, "message": "请提供搜索关键词"}, 400)
             return
 
         try:
             result = self.run_search_command(keyword)
-            self._send_json({
-                "success": result['success'],
-                "songs": result.get('songs', []),
-                "total": len(result.get('songs', [])),
-                "keyword": keyword
-            })
+            self._send_json(result)
         except Exception as e:
             self._send_json({"success": False, "message": f"搜索失败: {str(e)}"}, 500)
 
