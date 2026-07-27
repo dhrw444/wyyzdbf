@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""网易云音乐命令行播放器 - 登录 / 搜索 / 播放"""
+"""网易云音乐命令行播放器 - 登录 / 搜索 / 播放 / 统计"""
 
 import argparse
 import base64
@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -31,8 +32,9 @@ PUBKEY = "010001"
 NONCE = b"0CoJUm6Qyw8W8jud"
 
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
 
@@ -55,9 +57,9 @@ def _rsa_encrypt(text, pubkey, modulus):
 
 def _encrypt_params(data):
     if isinstance(data, dict):
-        data = json.dumps(data)
+        data = json.dumps(data, ensure_ascii=False)
     elif not isinstance(data, str):
-        data = json.dumps(data)
+        data = json.dumps(data, ensure_ascii=False)
     data_bytes = data.encode("utf-8")
     secret = binascii.hexlify(os.urandom(16))[:16]
     params = _aes_encrypt(_aes_encrypt(data_bytes, NONCE), secret).decode()
@@ -84,7 +86,9 @@ def _api_post(url, data, cookies=None, session=None):
 
 
 def _save_cookies(session):
-    COOKIE_FILE.write_text(json.dumps(session.cookies.get_dict(), ensure_ascii=False, indent=2))
+    tmp = COOKIE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(session.cookies.get_dict(), ensure_ascii=False, indent=2))
+    tmp.replace(COOKIE_FILE)
 
 
 def _load_cookies():
@@ -98,6 +102,12 @@ def _load_cookies():
 
 def _md5(text):
     return hashlib.md5(text.encode()).hexdigest()
+
+
+def _get_cookies_dict():
+    """获取当前 cookies dict，无登录态返回空 dict"""
+    cookies = _load_cookies()
+    return cookies if cookies else {}
 
 
 # ---------- 登录 ----------
@@ -116,7 +126,6 @@ def login_cellphone(phone, password=None, countrycode="86"):
             return session
         sys.exit(f"登录失败 [{result.get('code')}]: {result.get('message', result)}")
 
-    # 无密码则发验证码
     result = _api_post(
         "https://music.163.com/weapi/sms/captcha/sent",
         {"cellphone": phone, "ctcode": countrycode},
@@ -127,12 +136,7 @@ def login_cellphone(phone, password=None, countrycode="86"):
 
     print("验证码已发送，请查收短信")
     captcha = input("请输入短信验证码: ").strip()
-    data = {
-        "phone": phone,
-        "countrycode": countrycode,
-        "captcha": captcha,
-        "rememberLogin": "true",
-    }
+    data = {"phone": phone, "countrycode": countrycode, "captcha": captcha, "rememberLogin": "true"}
     result = _api_post("https://music.163.com/weapi/login/cellphone", data, session=session)
     if result.get("code") == 200:
         _save_cookies(session)
@@ -200,136 +204,129 @@ def login_qr():
     sys.exit("扫码超时")
 
 
-def get_session():
-    cookies = _load_cookies()
-    if cookies is None:
-        return None
-    session = requests.Session()
-    session.cookies.update(cookies)
-    return session
-
-
 def check_login():
-    session = get_session()
-    if session is None:
+    cookies = _get_cookies_dict()
+    if not cookies:
         print("未登录，请先执行: python netease_player.py login -p <手机号>")
         return None
 
     result = _api_post(
         "https://music.163.com/weapi/w/nuser/account/get",
         {},
-        cookies=session.cookies,
+        cookies=cookies,
     )
     if result.get("code") == 200:
         profile = result.get("profile", {})
         print(f"已登录 - {profile.get('nickname', 'N/A')} (UID: {profile.get('userId', 'N/A')})")
-        return session
+        return True
     print("登录态已过期，请重新登录")
     return None
 
 
 # ---------- 搜索 ----------
 
-def search_songs(keyword, limit=20):
-    session = get_session()
-    if session is None:
-        return None
-
-    data = {
-        "s": keyword,
-        "type": "1",
-        "limit": str(limit),
-        "offset": "0",
-        "total": "true",
-    }
-    result = _api_post(
-        "https://music.163.com/weapi/cloudsearch/get/web",
-        data,
-        cookies=session.cookies,
-    )
+def search_songs(keyword, limit=20, cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    data = {"s": keyword, "type": "1", "limit": str(limit), "offset": "0", "total": "true"}
+    result = _api_post("https://music.163.com/weapi/cloudsearch/get/web", data, cookies=cookies)
     if result.get("code") != 200:
-        print(f"搜索失败: {result}")
+        print(f"搜索失败: {result.get('message', result)}")
         return []
 
     songs = result.get("result", {}).get("songs", [])
-    results = []
-    for song in songs:
-        artists = "/".join(a.get("name", "") for a in song.get("ar", []))
-        album = song.get("al", {}).get("name", "N/A")
-        duration = song.get("dt", 0) // 1000
-        results.append({
-            "id": song["id"],
-            "name": song["name"],
-            "artists": artists,
-            "album": album,
-            "duration": duration,
-        })
-    return results
+    return [_song_to_dict(s) for s in songs]
+
+
+def search_all_songs(keyword, max_results=50, cookies=None):
+    """搜索歌手/关键词，分页获取尽可能多的歌曲"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    all_songs = []
+    seen_ids = set()
+    offset = 0
+    while len(all_songs) < max_results:
+        remain = max_results - len(all_songs)
+        batch = min(remain, 30)
+        data = {"s": keyword, "type": "1", "limit": str(batch), "offset": str(offset), "total": "true"}
+        result = _api_post("https://music.163.com/weapi/cloudsearch/get/web", data, cookies=cookies)
+        if result.get("code") != 200:
+            break
+        songs = result.get("result", {}).get("songs", [])
+        if not songs:
+            break
+        for song in songs:
+            sid = song["id"]
+            if sid in seen_ids:
+                continue
+            seen_ids.add(sid)
+            all_songs.append(_song_to_dict(song))
+        offset += batch
+    return all_songs
+
+
+def _song_to_dict(song):
+    artists = "/".join(a.get("name", "") for a in song.get("ar", []))
+    return {
+        "id": song["id"],
+        "name": song["name"],
+        "artists": artists,
+        "album": song.get("al", {}).get("name", "N/A"),
+        "duration": song.get("dt", 0) // 1000,
+    }
 
 
 # ---------- 获取播放地址 ----------
 
-def get_song_url(song_id, level="standard"):
-    session = get_session()
-    if session is None:
-        return None
-
-    level_map = {
-        "standard": "standard",
-        "higher": "higher",
-        "exhigh": "exhigh",
-        "lossless": "lossless",
-        "hires": "hires",
-    }
+def get_song_url(song_id, level="standard", cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    level_map = {"standard": "standard", "higher": "higher", "exhigh": "exhigh", "lossless": "lossless", "hires": "hires"}
     data = {"ids": f"[{song_id}]", "level": level_map.get(level, level), "encodeType": "aac"}
-    result = _api_post(
-        "https://music.163.com/weapi/song/enhance/player/url/v1",
-        data,
-        cookies=session.cookies,
-    )
+    result = _api_post("https://music.163.com/weapi/song/enhance/player/url/v1", data, cookies=cookies)
     if result.get("code") != 200:
-        print(f"获取歌曲地址失败: {result}")
         return None
-
     song_data = result.get("data", [])
     if not song_data:
         return None
-
     info = song_data[0]
     if info.get("code") == 200 and info.get("url"):
-        br = info.get("br", 0) // 1000
-        print(f"音质: {br}kbps")
         return info["url"]
-
-    code_map = {
-        -110: "无版权或需要 VIP",
-        -104: "需要 VIP",
-    }
-    msg = code_map.get(info.get("code"), f"code={info.get('code')}")
-    print(f"无法获取播放地址: {msg}")
     return None
+
+
+def check_playable(song_id, cookies=None):
+    """检测单首歌曲是否可播放"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    data = {"ids": f"[{song_id}]", "level": "standard", "encodeType": "aac"}
+    result = _api_post("https://music.163.com/weapi/song/enhance/player/url/v1", data, cookies=cookies)
+    if result.get("code") != 200:
+        return False, None, ""
+    info = result.get("data", [{}])[0]
+    if info.get("code") == 200 and info.get("url"):
+        return True, info["url"], f"{info.get('br', 0) // 1000}kbps"
+    reason_map = {-110: "无版权", -104: "需VIP", -100: "已下架"}
+    return False, None, reason_map.get(info.get("code"), "不可用")
 
 
 # ---------- 歌词 ----------
 
-def get_lyrics(song_id):
-    session = get_session()
-    if session is None:
-        return None
-
+def get_lyrics(song_id, cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
     result = _api_post(
         "https://music.163.com/weapi/song/lyric",
         {"id": str(song_id), "lv": -1, "tv": -1, "csrf_token": ""},
-        cookies=session.cookies,
+        cookies=cookies,
     )
     if result.get("code") != 200:
         return None
-    lrc = result.get("lrc", {})
-    return lrc.get("lyric", "")
+    return result.get("lrc", {}).get("lyric", "")
 
 
-def show_lyrics(song_id):
-    lyrics = get_lyrics(song_id)
+def show_lyrics(song_id, cookies=None):
+    lyrics = get_lyrics(song_id, cookies)
     if lyrics:
         print("\n--- 歌词 ---")
         for line in lyrics.strip().split("\n"):
@@ -341,91 +338,65 @@ def show_lyrics(song_id):
 
 # ---------- 歌单 ----------
 
-def get_user_playlists(uid):
-    session = get_session()
-    if session is None:
-        return None
-
+def get_user_playlists(uid, cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
     data = {"uid": str(uid), "wordwrap": "7", "offset": "0", "total": "true", "limit": "1000"}
-    result = _api_post(
-        "https://music.163.com/weapi/user/playlist",
-        data,
-        cookies=session.cookies,
-    )
+    result = _api_post("https://music.163.com/weapi/user/playlist", data, cookies=cookies)
     if result.get("code") != 200:
-        print(f"获取歌单失败: {result}")
+        print(f"获取歌单失败: {result.get('message', result)}")
         return []
-
-    playlists = result.get("playlist", [])
     return [
-        {
-            "id": pl["id"],
-            "name": pl["name"],
-            "track_count": pl.get("trackCount", 0),
-            "creator": pl.get("creator", {}).get("nickname", ""),
-        }
-        for pl in playlists
+        {"id": pl["id"], "name": pl["name"], "track_count": pl.get("trackCount", 0),
+         "creator": pl.get("creator", {}).get("nickname", "")}
+        for pl in result.get("playlist", [])
     ]
 
 
-def get_playlist_tracks(playlist_id):
-    session = get_session()
-    if session is None:
-        return None
-
+def get_playlist_tracks(playlist_id, cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
     result = _api_post(
         "https://music.163.com/api/v3/playlist/detail",
         {"id": str(playlist_id), "total": "true", "limit": "1000", "n": "1000", "offset": "0"},
-        cookies=session.cookies,
+        cookies=cookies,
     )
     if result.get("code") != 200:
-        print(f"获取歌单详情失败: {result}")
+        print(f"获取歌单详情失败: {result.get('message', result)}")
         return []
-
     tracks = result.get("playlist", {}).get("tracks", [])
-    return [
-        {
-            "id": t["id"],
-            "name": t["name"],
-            "artists": "/".join(a.get("name", "") for a in t.get("ar", [])),
-            "album": t.get("al", {}).get("name", "N/A"),
-            "duration": t.get("dt", 0) // 1000,
-        }
-        for t in tracks
-    ]
+    return [_song_to_dict(t) for t in tracks]
 
 
 # ---------- 每日推荐 ----------
 
-def daily_recommend():
-    session = get_session()
-    if session is None:
-        return None
-
+def daily_recommend(cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
     result = _api_post(
         "https://music.163.com/weapi/v2/discovery/recommend/songs",
         {"csrf_token": ""},
-        cookies=session.cookies,
+        cookies=cookies,
     )
     if result.get("code") != 200:
         print(f"获取每日推荐失败 [{result.get('code')}]: {result.get('message', result)}")
         return []
-
     songs = result.get("data", {}).get("dailySongs", [])
     if not songs:
-        print("未获取到每日推荐 (可能是当天已生成过推荐)")
+        print("未获取到每日推荐")
         return []
+    return [_song_to_dict(s) for s in songs]
 
-    return [
-        {
-            "id": s["id"],
-            "name": s["name"],
-            "artists": "/".join(a.get("name", "") for a in s.get("ar", [])),
-            "album": s.get("al", {}).get("name", "N/A"),
-            "duration": s.get("dt", 0) // 1000,
-        }
-        for s in songs
-    ]
+
+# ---------- 用户 UID ----------
+
+def get_uid(cookies=None):
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    result = _api_post("https://music.163.com/weapi/w/nuser/account/get", {}, cookies=cookies)
+    if result.get("code") == 200:
+        return result.get("profile", {}).get("userId")
+    return None
 
 
 # ---------- 交互式选择 ----------
@@ -435,8 +406,8 @@ def pick_song(songs):
         print("没有找到歌曲")
         return None
     for i, s in enumerate(songs):
-        mins, secs = divmod(s["duration"], 60)
-        print(f"  [{i}] {s['name']} - {s['artists']} ({s['album']}) [{mins}:{secs:02d}]")
+        m, sec = divmod(s["duration"], 60)
+        print(f"  [{i}] {s['name']} - {s['artists']} ({s['album']}) [{m}:{sec:02d}]")
     while True:
         choice = input(f"\n选择歌曲 (0-{len(songs)-1}, q 退出): ").strip()
         if choice.lower() == "q":
@@ -469,15 +440,21 @@ def pick_playlist(playlists):
 
 # ---------- 播放 ----------
 
+def _find_player():
+    for name in ["mpv", "ffplay"]:
+        path = subprocess.run(["which", name], capture_output=True, text=True).stdout.strip()
+        if path:
+            return name, path
+    return None, None
+
+
 def play_audio(url, title=""):
     """播放单首歌曲，放完后自动结束"""
-    mpv_path = subprocess.run(["which", "mpv"], capture_output=True, text=True).stdout.strip()
-    ffplay_path = subprocess.run(["which", "ffplay"], capture_output=True, text=True).stdout.strip()
-
-    if mpv_path:
-        cmd = [mpv_path, "--no-video", url]
-    elif ffplay_path:
-        cmd = [ffplay_path, "-nodisp", "-autoexit", url]
+    player_name, player_path = _find_player()
+    if player_name == "mpv":
+        cmd = [player_path, "--no-video", url]
+    elif player_name == "ffplay":
+        cmd = [player_path, "-nodisp", "-autoexit", "-loglevel", "error", url]
     else:
         print("未找到播放器，正在下载音频...")
         return _download_audio(url, title)
@@ -505,6 +482,8 @@ def play_n_songs(songs, n):
         except KeyboardInterrupt:
             print("\n播放已终止")
             return
+        except Exception as e:
+            print(f"\n播放失败，跳过: {e}")
     print(f"\n===== 播放完毕，共 {count} 首 =====")
 
 
@@ -523,25 +502,24 @@ def play_n_minutes(songs, minutes):
         m, sec = divmod(s["duration"], 60)
         remain_sec = target_sec - acc
         remain_m, remain_s = divmod(remain_sec, 60)
-        print(f"\n[{idx}] {s['name']} - {s['artists']} [{m}:{sec:02d}] (已播放 {acc//60}分{acc%60}秒, 剩余 {remain_m}分{remain_s}秒)")
+        print(f"\n[{idx}] {s['name']} - {s['artists']} [{m}:{sec:02d}] (已播 {acc//60}分{acc%60}秒, 还需 {remain_m}分{remain_s}秒)")
         try:
             play_audio(s["url"], f"{s['name']} - {s['artists']}")
         except KeyboardInterrupt:
             print("\n播放已终止")
             return
+        except Exception as e:
+            print(f"\n播放失败，跳过: {e}")
         acc += s["duration"]
     total_m, total_s = divmod(acc, 60)
     print(f"\n===== 播放完毕，共 {idx} 首，累计 {total_m}分{total_s}秒 =====")
 
 
 def _download_audio(url, title=""):
-    import re
-    safe = "".join(c for c in title if c.isalnum() or c in " _-()") or "song"
-    safe = re.sub(r"[^a-zA-Z0-9_\-\s\(\)]", "", safe).strip()[:50]
+    safe = re.sub(r"[^a-zA-Z0-9_\-]", "", "".join(c for c in title if c.isalnum() or c in " _-"))[:50]
     if not safe:
         safe = f"song_{int(time.time())}"
     filepath = Path(f"/tmp/{safe}.mp3")
-    # 防止重复覆盖
     if filepath.exists():
         filepath = Path(f"/tmp/{safe}_{int(time.time()*1000)%10000}.mp3")
     try:
@@ -565,114 +543,57 @@ def _download_audio(url, title=""):
 
 # ---------- 统计 ----------
 
-def search_all_songs(keyword, max_results=50):
-    """搜索歌手/关键词，获取尽可能多的歌曲"""
-    session = get_session()
-    cookies = session.cookies if session else {}
-    all_songs = []
-    offset = 0
-    while len(all_songs) < max_results:
-        remain = max_results - len(all_songs)
-        batch = min(remain, 30)
-        data = {
-            "s": keyword,
-            "type": "1",
-            "limit": str(batch),
-            "offset": str(offset),
-            "total": "true",
-        }
-        result = _api_post(
-            "https://music.163.com/weapi/cloudsearch/get/web",
-            data,
-            cookies=cookies,
-        )
-        if result.get("code") != 200:
-            break
-        songs = result.get("result", {}).get("songs", [])
-        if not songs:
-            break
-        for song in songs:
-            artists = "/".join(a.get("name", "") for a in song.get("ar", []))
-            duration = song.get("dt", 0) // 1000
-            all_songs.append({
-                "id": song["id"],
-                "name": song["name"],
-                "artists": artists,
-                "album": song.get("al", {}).get("name", "N/A"),
-                "duration": duration,
-            })
-        offset += batch
-    return all_songs
+def _fmt_dur(sec):
+    h, rem = divmod(sec, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}小时{m}分{s}秒"
+    return f"{m}分{s}秒"
 
 
-def check_playable(song_id, cookies=None):
-    """检测单首歌曲是否可播放"""
-    if cookies is None:
-        session = get_session()
-        cookies = session.cookies if session else {}
-    data = {"ids": f"[{song_id}]", "level": "standard", "encodeType": "aac"}
-    result = _api_post(
-        "https://music.163.com/weapi/song/enhance/player/url/v1",
-        data,
-        cookies=cookies,
-    )
-    if result.get("code") != 200:
-        return False, None, ""
-    info = result.get("data", [{}])[0]
-    if info.get("code") == 200 and info.get("url"):
-        return True, info["url"], f"{info.get('br', 0) // 1000}kbps"
-    reason_map = {-110: "无版权", -104: "需VIP", -100: "已下架"}
-    raw_code = info.get("code")
-    return False, None, reason_map.get(raw_code, "不可用")
+def _filter_by_artist(songs, artist_keyword):
+    """按歌手名过滤歌曲"""
+    if not artist_keyword:
+        return songs
+    kw = artist_keyword.lower()
+    return [s for s in songs if kw in s.get("artists", "").lower() or kw in s.get("name", "").lower()]
 
 
-def stats_artist(keyword, max_results=50):
-    """统计某歌手/关键词的歌曲数和总时长"""
-    session = get_session()
-    cookies = session.cookies if session else {}
-
-    print(f"\n正在搜索: {keyword} ...")
-    songs = search_all_songs(keyword, max_results)
-    if not songs:
-        print("未找到歌曲")
-        return None
-
-    total_duration = sum(s["duration"] for s in songs)
-    total_min, total_sec = divmod(total_duration, 60)
-    total_hour = total_min // 60
-    total_min = total_min % 60
-
-    print(f"\n===== 搜索结果统计 =====")
-    print(f"匹配歌曲: {len(songs)} 首")
-    print(f"总时长: {total_hour}小时{total_min}分{total_sec}秒")
-    print(f"========================\n")
-
-    print("歌曲列表:")
-    for i, s in enumerate(songs):
-        m, sec = divmod(s["duration"], 60)
-        print(f"  [{i}] {s['name']} - {s['artists']} [{m}:{sec:02d}]")
-
-    print(f"\n正在检测可播放歌曲...")
+def _check_playable_batch(songs, cookies):
+    """批量检测可播放性"""
     playable = []
     unplayable = []
+    total = len(songs)
     for i, s in enumerate(songs):
         ok, url, info = check_playable(s["id"], cookies)
         if ok:
             playable.append({**s, "url": url, "quality": info})
         else:
             unplayable.append({**s, "reason": info})
-        pct = (i + 1) / len(songs) * 100
-        print(f"\r检测进度: {i+1}/{len(songs)} ({pct:.0f}%)", end="", flush=True)
+        pct = (i + 1) / total * 100
+        print(f"\r检测进度: {i+1}/{total} ({pct:.0f}%)", end="", flush=True)
+    return playable, unplayable
 
-    p_duration = sum(s["duration"] for s in playable)
-    p_min, p_sec = divmod(p_duration, 60)
 
-    u_duration = sum(s["duration"] for s in unplayable)
-    u_min, u_sec = divmod(u_duration, 60)
+def _print_stats(songs, playable, unplayable, label=""):
+    """打印统计结果"""
+    total_dur = sum(s["duration"] for s in songs)
+    p_dur = sum(s["duration"] for s in playable)
+    u_dur = sum(s["duration"] for s in unplayable)
 
-    print(f"\n\n===== 可播放性分析 =====")
-    print(f"可播放: {len(playable)} 首, 总时长 {p_min}分{p_sec}秒")
-    print(f"不可播放: {len(unplayable)} 首, 总时长 {u_min}分{u_sec}秒")
+    print(f"\n{'='*40}")
+    if label:
+        print(f"  {label}")
+    print(f"  总匹配: {len(songs)} 首, 总时长 {_fmt_dur(total_dur)}")
+    print(f"  可播放: {len(playable)} 首, 总时长 {_fmt_dur(p_dur)}")
+    print(f"  不可播放: {len(unplayable)} 首, 总时长 {_fmt_dur(u_dur)}")
+    print(f"{'='*40}")
+
+    if songs:
+        print(f"\n歌曲列表:")
+        for i, s in enumerate(songs):
+            m, sec = divmod(s["duration"], 60)
+            print(f"  [{i}] {s['name']} - {s['artists']} [{m}:{sec:02d}]")
 
     if unplayable:
         print(f"\n不可播放歌曲:")
@@ -683,12 +604,62 @@ def stats_artist(keyword, max_results=50):
     return {"songs": songs, "playable": playable, "unplayable": unplayable}
 
 
+def stats_search(keyword, max_results=50, cookies=None):
+    """方式一: 通过搜索统计歌手歌曲"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    print(f"\n[搜索统计] 正在搜索: {keyword} ...")
+    songs = search_all_songs(keyword, max_results, cookies)
+    if not songs:
+        print("未找到歌曲")
+        return None
+
+    print(f"\n正在检测可播放性...")
+    playable, unplayable = _check_playable_batch(songs, cookies)
+    return _print_stats(songs, playable, unplayable, f"搜索: {keyword}")
+
+
+def stats_playlist(playlist_id, artist_filter=None, cookies=None):
+    """方式二: 通过歌单统计（可选按歌手过滤）"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    print(f"\n[歌单统计] 正在加载歌单: {playlist_id} ...")
+    tracks = get_playlist_tracks(playlist_id, cookies)
+    if not tracks:
+        print("歌单为空或加载失败")
+        return None
+
+    filtered = _filter_by_artist(tracks, artist_filter)
+    label = f"歌单: {playlist_id}"
+    if artist_filter:
+        label += f" (歌手过滤: {artist_filter})"
+
+    print(f"\n正在检测可播放性...")
+    playable, unplayable = _check_playable_batch(filtered, cookies)
+    return _print_stats(filtered, playable, unplayable, label)
+
+
+def stats_daily(artist_filter=None, cookies=None):
+    """方式三: 通过每日推荐统计"""
+    if cookies is None:
+        cookies = _get_cookies_dict()
+    print(f"\n[每日推荐统计] 正在获取推荐 ...")
+    songs = daily_recommend(cookies)
+    if not songs:
+        print("未获取到每日推荐")
+        return None
+
+    filtered = _filter_by_artist(songs, artist_filter)
+    label = "每日推荐"
+    if artist_filter:
+        label += f" (歌手过滤: {artist_filter})"
+
+    print(f"\n正在检测可播放性...")
+    playable, unplayable = _check_playable_batch(filtered, cookies)
+    return _print_stats(filtered, playable, unplayable, label)
+
+
 # ---------- CLI ----------
-
-def _fmt_duration(sec):
-    m, s = divmod(sec, 60)
-    return f"{m}:{s:02d}"
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -696,18 +667,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python netease_player.py login -p 13800138000          # 手机号+密码登录
-  python netease_player.py login -p 13800138000 --sms    # 手机号+短信验证码登录
-  python netease_player.py login -p user@example.com     # 邮箱登录
-  python netease_player.py login --qr                    # 二维码登录
-  python netease_player.py search 周杰伦                  # 搜索歌曲
-  python netease_player.py stats 周杰伦                   # 统计歌手歌曲数/时长+可播放分析
-  python netease_player.py stats 周杰伦 --play-n 5        # 统计后连续播放前5首
-  python netease_player.py stats 周杰伦 --play-min 30     # 统计后连续播放30分钟
-  python netease_player.py playlist                      # 我的歌单
-  python netease_player.py daily                         # 每日推荐
-  python netease_player.py play --id 123456              # 按ID播放
-  python netease_player.py status                        # 查看登录状态
+  python netease_player.py login -p 13800138000            # 手机号+密码登录
+  python netease_player.py login -p 13800138000 --sms      # 短信验证码登录
+  python netease_player.py login -p user@example.com       # 邮箱登录
+  python netease_player.py login --qr                      # 二维码登录
+  python netease_player.py search 周杰伦                    # 搜索并播放
+  python netease_player.py stats-search 周杰伦               # 搜索统计歌曲数/时长
+  python netease_player.py stats-search 周杰伦 --play-n 5    # 统计后连播5首
+  python netease_player.py stats-search 周杰伦 --play-min 30 # 统计后连播30分钟
+  python netease_player.py stats-playlist 123456             # 歌单统计
+  python netease_player.py stats-playlist 123456 -a 周杰伦  # 歌单中某歌手统计
+  python netease_player.py stats-daily                      # 每日推荐统计
+  python netease_player.py stats-daily -a 周杰伦             # 每日推荐中某歌手统计
+  python netease_player.py playlist                          # 浏览歌单
+  python netease_player.py daily                             # 每日推荐
+  python netease_player.py play --id 123456                  # 按ID播放
+  python netease_player.py status                            # 查看登录状态
         """,
     )
     sub_cmd = parser.add_subparsers(dest="cmd")
@@ -731,17 +706,28 @@ def main():
     p_play.add_argument("--level", default="standard",
                         choices=["standard", "higher", "exhigh", "lossless", "hires"])
 
-    p_list = sub_cmd.add_parser("playlist", help="我的歌单")
+    p_list = sub_cmd.add_parser("playlist", help="浏览歌单")
     p_list.add_argument("--lyrics", action="store_true", help="显示歌词")
 
     p_daily = sub_cmd.add_parser("daily", help="每日推荐")
     p_daily.add_argument("--lyrics", action="store_true", help="显示歌词")
 
-    p_stats = sub_cmd.add_parser("stats", help="统计歌手歌曲数/时长 + 可播放性")
-    p_stats.add_argument("keyword", help="歌手名或关键词")
-    p_stats.add_argument("-n", "--max", type=int, default=50, help="最大搜索数量")
-    p_stats.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
-    p_stats.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
+    p_ss = sub_cmd.add_parser("stats-search", help="搜索统计歌曲数/时长")
+    p_ss.add_argument("keyword", help="歌手名或关键词")
+    p_ss.add_argument("-n", "--max", type=int, default=50, help="最大搜索数量")
+    p_ss.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
+    p_ss.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
+
+    p_sp = sub_cmd.add_parser("stats-playlist", help="歌单统计歌曲数/时长")
+    p_sp.add_argument("playlist_id", type=int, help="歌单 ID")
+    p_sp.add_argument("-a", "--artist", help="按歌手名过滤")
+    p_sp.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
+    p_sp.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
+
+    p_sd = sub_cmd.add_parser("stats-daily", help="每日推荐统计")
+    p_sd.add_argument("-a", "--artist", help="按歌手名过滤")
+    p_sd.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
+    p_sd.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
 
     args = parser.parse_args()
 
@@ -770,87 +756,108 @@ def main():
         check_login()
         return
 
-    session = check_login()
-    if session is None:
+    if not check_login():
         return
 
+    cookies = _get_cookies_dict()
+
     if args.cmd == "search":
-        songs = search_songs(args.keyword, args.limit)
+        songs = search_songs(args.keyword, args.limit, cookies)
         song = pick_song(songs)
         if song is None:
             return
-        url = get_song_url(song["id"])
+        url = get_song_url(song["id"], cookies=cookies)
         if url is None:
+            print("无法获取播放地址")
             return
         if args.lyrics:
-            show_lyrics(song["id"])
+            show_lyrics(song["id"], cookies)
         play_audio(url, f"{song['name']} - {song['artists']}")
 
     elif args.cmd == "play":
-        url = get_song_url(args.id, args.level)
+        url = get_song_url(args.id, args.level, cookies)
         if url is None:
+            print("无法获取播放地址")
             return
         if args.lyrics:
-            show_lyrics(args.id)
+            show_lyrics(args.id, cookies)
         play_audio(url, str(args.id))
 
     elif args.cmd == "playlist":
-        uid_resp = _api_post(
-            "https://music.163.com/weapi/w/nuser/account/get",
-            {},
-            cookies=session.cookies,
-        )
-        uid = uid_resp.get("profile", {}).get("userId")
+        uid = get_uid(cookies)
         if not uid:
             sys.exit("无法获取用户 ID")
-
-        playlists = get_user_playlists(uid)
+        playlists = get_user_playlists(uid, cookies)
         pl = pick_playlist(playlists)
         if pl is None:
             return
         print(f"\n加载歌单: {pl['name']} ...")
-        tracks = get_playlist_tracks(pl["id"])
+        tracks = get_playlist_tracks(pl["id"], cookies)
         song = pick_song(tracks)
         if song is None:
             return
-        url = get_song_url(song["id"])
+        url = get_song_url(song["id"], cookies=cookies)
         if url is None:
+            print("无法获取播放地址")
             return
         if args.lyrics:
-            show_lyrics(song["id"])
+            show_lyrics(song["id"], cookies)
         play_audio(url, f"{song['name']} - {song['artists']}")
 
     elif args.cmd == "daily":
-        print("获取每日推荐 ...")
-        songs = daily_recommend()
+        songs = daily_recommend(cookies)
         song = pick_song(songs)
         if song is None:
             return
-        url = get_song_url(song["id"])
+        url = get_song_url(song["id"], cookies=cookies)
         if url is None:
+            print("无法获取播放地址")
             return
         if args.lyrics:
-            show_lyrics(song["id"])
+            show_lyrics(song["id"], cookies)
         play_audio(url, f"{song['name']} - {song['artists']}")
 
-    elif args.cmd == "stats":
-        result = stats_artist(args.keyword, args.max)
-        if result is None:
-            return
-        playable = result["playable"]
-        if not playable:
+    elif args.cmd == "stats-search":
+        result = stats_search(args.keyword, args.max, cookies)
+        if result is None or not result.get("playable"):
             print("\n没有可播放的歌曲")
             return
-
         if args.play_n > 0:
-            play_n_songs(playable, args.play_n)
+            play_n_songs(result["playable"], args.play_n)
         elif args.play_min > 0:
-            play_n_minutes(playable, args.play_min)
+            play_n_minutes(result["playable"], args.play_min)
         else:
-            song = pick_song(playable)
-            if song is None:
-                return
-            play_audio(song["url"], f"{song['name']} - {song['artists']}")
+            song = pick_song(result["playable"])
+            if song:
+                play_audio(song["url"], f"{song['name']} - {song['artists']}")
+
+    elif args.cmd == "stats-playlist":
+        result = stats_playlist(args.playlist_id, args.artist, cookies)
+        if result is None or not result.get("playable"):
+            print("\n没有可播放的歌曲")
+            return
+        if args.play_n > 0:
+            play_n_songs(result["playable"], args.play_n)
+        elif args.play_min > 0:
+            play_n_minutes(result["playable"], args.play_min)
+        else:
+            song = pick_song(result["playable"])
+            if song:
+                play_audio(song["url"], f"{song['name']} - {song['artists']}")
+
+    elif args.cmd == "stats-daily":
+        result = stats_daily(args.artist, cookies)
+        if result is None or not result.get("playable"):
+            print("\n没有可播放的歌曲")
+            return
+        if args.play_n > 0:
+            play_n_songs(result["playable"], args.play_n)
+        elif args.play_min > 0:
+            play_n_minutes(result["playable"], args.play_min)
+        else:
+            song = pick_song(result["playable"])
+            if song:
+                play_audio(song["url"], f"{song['name']} - {song['artists']}")
 
 
 if __name__ == "__main__":
