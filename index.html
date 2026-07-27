@@ -731,6 +731,34 @@
           <div class="console-line info">输入关键词搜索歌曲...</div>
         </div>
       </div>
+
+      <!-- 添加账号模态框 -->
+      <div class="modal-overlay" id="addAccountModal">
+        <div class="modal">
+          <div class="modal-header">
+            <div class="modal-title">添加账号</div>
+            <button class="modal-close" onclick="closeModal()">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">手机号</label>
+              <input type="text" id="phoneInput" class="form-input" placeholder="请输入手机号">
+            </div>
+            <div class="form-group">
+              <label class="form-label">验证码</label>
+              <div class="verify-container">
+                <input type="text" id="verifyInput" class="form-input verify-input" placeholder="请输入验证码">
+                <button class="send-btn" id="sendCodeBtn" onclick="sendVerifyCode()" disabled>发送验证码</button>
+              </div>
+              <small class="console-line info" id="verifyHint">发送验证码后输入验证码登录</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary" onclick="verifyAndLogin()" id="loginBtn" disabled>登录</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -763,6 +791,160 @@ function showPage(pageName) {
 
   if (pageName !== currentPage) {
     log(`切换到${pageName === 'accounts' ? '账号管理' : '搜索'}页面`, 'info');
+  }
+}
+
+// Modal functions
+function openModal() {
+  const modal = document.getElementById('addAccountModal');
+  modal.classList.add('active');
+
+  // 清空输入框
+  document.getElementById('phoneInput').value = '';
+  document.getElementById('verifyInput').value = '';
+  document.getElementById('sendCodeBtn').disabled = true;
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('verifyHint').textContent = '发送验证码后输入验证码登录';
+
+  // 监听手机号输入
+  document.getElementById('phoneInput').addEventListener('input', checkPhoneInput);
+}
+
+function closeModal() {
+  const modal = document.getElementById('addAccountModal');
+  modal.classList.remove('active');
+}
+
+function checkPhoneInput() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const phoneReg = /^1[3-9]\d{9}$/;
+  const sendBtn = document.getElementById('sendCodeBtn');
+  const loginBtn = document.getElementById('loginBtn');
+
+  sendBtn.disabled = !phoneReg.test(phone);
+  loginBtn.disabled = true;
+
+  if (phoneReg.test(phone)) {
+    document.getElementById('verifyHint').textContent = '手机号格式正确，点击发送验证码';
+  } else {
+    document.getElementById('verifyHint').textContent = '请输入正确的11位手机号';
+  }
+}
+
+async function sendVerifyCode() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const phoneReg = /^1[3-9]\d{9}$/;
+
+  if (!phoneReg.test(phone)) {
+    alert('请输入正确的11位手机号');
+    return;
+  }
+
+  const sendBtn = document.getElementById('sendCodeBtn');
+  const verifyHint = document.getElementById('verifyHint');
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = '发送中...';
+  verifyHint.textContent = '正在发送验证码...';
+
+  try {
+    const response = await fetch('/api/send-code', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({phone: phone}),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      sendBtn.textContent = '已发送';
+      verifyHint.textContent = `验证码已发送，${result.expires || '120'}秒内有效`;
+      document.getElementById('loginBtn').disabled = false;
+
+      // 启用倒计时
+      startCountdown(result.expires || 120);
+    } else {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送验证码';
+      verifyHint.textContent = `发送失败: ${result.message}`;
+    }
+  } catch (error) {
+    sendBtn.disabled = false;
+    sendBtn.textContent = '发送验证码';
+    verifyHint.textContent = `发送出错: ${error.message}`;
+  }
+}
+
+let countdownTimer = null;
+
+function startCountdown(seconds) {
+  let remaining = seconds;
+  const sendBtn = document.getElementById('sendCodeBtn');
+
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+  }
+
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(countdownTimer);
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送验证码';
+      document.getElementById('verifyHint').textContent = '验证码已过期，请重新发送';
+    } else {
+      sendBtn.textContent = `${remaining}秒后重发`;
+    }
+  }, 1000);
+}
+
+async function verifyAndLogin() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const code = document.getElementById('verifyInput').value.trim();
+
+  const phoneReg = /^1[3-9]\d{9}$/;
+  if (!phoneReg.test(phone)) {
+    alert('请输入正确的11位手机号');
+    return;
+  }
+
+  if (!code) {
+    alert('请输入验证码');
+    return;
+  }
+
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.textContent = '登录中...';
+  loginBtn.disabled = true;
+
+  try {
+    const response = await fetch('/api/verify-login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        phone: phone,
+        code: code
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      log(`账号登录成功: ${phone}`, 'success');
+      closeModal();
+      // 刷新账号列表
+      setTimeout(() => {
+        location.reload();
+      }, 500);
+    } else {
+      loginBtn.textContent = '登录';
+      loginBtn.disabled = false;
+      alert(`登录失败: ${result.message}`);
+    }
+  } catch (error) {
+    loginBtn.textContent = '登录';
+    loginBtn.disabled = false;
+    alert(`登录出错: ${error.message}`);
   }
 }
 
@@ -852,27 +1034,8 @@ function log(message, type = 'info') {
 }
 
 function addAccount() {
-  const phone = prompt('请输入手机号:');
-  if (!phone) return;
-
-  const password = prompt('请输入密码:');
-  if (!password) return;
-
-  const newId = Math.max(...accounts.map(a => a.id)) + 1;
-  accounts.push({
-    id: newId,
-    name: `账号 ${newId}`,
-    phone: phone,
-    password: password,
-    status: 'offline',
-    tasks: 0,
-    completed: 0,
-    progress: 0,
-    running: false
-  });
-  renderAccounts();
-  log(`添加新账号: 账号 ${newId} (${phone})`, 'success');
-  loginAccount(newId);
+  // 不再使用 prompt，改为打开模态框
+  openModal();
 }
 
 function deleteAccount(accountId) {

@@ -171,6 +171,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/settings/threads":
             return self.handle_update_threads()
 
+        if path == "/api/send-code":
+            return self.handle_send_code()
+
+        if path == "/api/verify-login":
+            return self.handle_verify_login()
+
         if path == "/api/search":
             return self.handle_search()
 
@@ -328,7 +334,74 @@ class Handler(BaseHTTPRequestHandler):
             "message": f"线程池大小已更新为 {task_manager['max_threads']}"
         })
 
-    def handle_search(self):
+    def handle_send_code(self):
+        """发送验证码"""
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        phone = data.get("phone", "").strip()
+
+        if not phone:
+            self._send_json({"success": False, "message": "请输入手机号"}, 400)
+            return
+
+        # 验证手机号格式
+        import re
+        phone_reg = r'^1[3-9]\d{9}$'
+        if not re.match(phone_reg, phone):
+            self._send_json({"success": False, "message": "手机号格式不正确"}, 400)
+            return
+
+        # 调用 netease_player.py 发送验证码
+        result = run_command(['login', '-p', phone, '--sms'])
+
+        if result['success'] and "验证码已发送" in result.get('output', ''):
+            self._send_json({
+                "success": True,
+                "message": "验证码已发送",
+                "expires": 120
+            })
+        else:
+            self._send_json({
+                "success": False,
+                "message": "发送验证码失败: " + result.get('output', '未知错误')
+            }, 400)
+
+    def handle_verify_login(self):
+        """验证码登录"""
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        phone = data.get("phone", "").strip()
+        code = data.get("code", "").strip()
+
+        if not phone or not code:
+            self._send_json({"success": False, "message": "请填写手机号和验证码"}, 400)
+            return
+
+        # 验证码登录
+        result = run_command(['login', '-p', phone, '--sms'])
+
+        if result['success']:
+            # 获取用户信息
+            new_id = max(task_manager['accounts'].keys(), default=0) + 1
+            account = Account(
+                id=new_id,
+                name=f'账号 {new_id}',
+                phone=phone,
+                password='',
+                status='online'
+            )
+            task_manager['accounts'][new_id] = account
+
+            self._send_json({
+                "success": True,
+                "message": "登录成功",
+                "account": self.account_to_dict(account)
+            })
+        else:
+            self._send_json({
+                "success": False,
+                "message": "验证码验证失败: " + result.get('output', '验证码错误')
+            }, 400)
         """处理歌曲搜索"""
         length = int(self.headers.get("Content-Length", 0))
         data = json.loads(self.rfile.read(length).decode("utf-8"))
