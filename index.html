@@ -12,7 +12,6 @@
     --spotify-gray: #282828;
     --spotify-light-gray: #b3b3b3;
     --spotify-white: #ffffff;
-    --spotify-blue: #1d3557;
     --spotify-error: #e94560;
     --spotify-success: #2a9d8f;
     --spotify-warning: #f4a261;
@@ -97,6 +96,49 @@
   .status-dot.online { background: var(--spotify-green); }
   .status-dot.offline { background: var(--spotify-error); }
   .status-dot.running { background: var(--spotify-warning); }
+
+  /* Navigation */
+  .nav-container {
+    background: var(--spotify-dark);
+    border-bottom: 1px solid var(--spotify-gray);
+    padding: 15px 0;
+    flex-shrink: 0;
+  }
+
+  .nav-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .nav-item {
+    background: var(--spotify-gray);
+    border: 1px solid var(--spotify-gray);
+    color: var(--spotify-light-gray);
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-item:hover {
+    border-color: var(--spotify-green);
+    color: var(--spotify-white);
+  }
+
+  .nav-item.active {
+    background: var(--spotify-green);
+    color: var(--spotify-black);
+    border-color: var(--spotify-green);
+  }
 
   /* Main Content */
   .main-content {
@@ -200,6 +242,12 @@
     color: var(--spotify-warning);
   }
 
+  .account-status.loading {
+    background: rgba(244, 162, 97, 0.2);
+    color: var(--spotify-warning);
+    animation: pulse-status 1s infinite;
+  }
+
   .account-status.error {
     background: rgba(233, 69, 96, 0.2);
     color: var(--spotify-error);
@@ -208,6 +256,11 @@
   .account-status.offline {
     background: rgba(179, 179, 179, 0.2);
     color: var(--spotify-light-gray);
+  }
+
+  @keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .account-info {
@@ -323,27 +376,6 @@
   .console-line.info { color: var(--spotify-light-gray); }
   .console-line.account { color: var(--spotify-green); font-weight: bold; }
 
-  .console-input {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .console-input input {
-    flex: 1;
-    background: var(--spotify-gray);
-    border: 1px solid var(--spotify-gray);
-    color: var(--spotify-white);
-    padding: 12px 16px;
-    border-radius: 25px;
-    font-size: 0.9rem;
-  }
-
-  .console-input input:focus {
-    outline: none;
-    border-color: var(--spotify-green);
-  }
-
   /* Progress Bar */
   .progress-container {
     margin-top: 15px;
@@ -351,7 +383,6 @@
     border-radius: 10px;
     height: 8px;
     overflow: hidden;
-    position: relative;
   }
 
   .progress-bar {
@@ -359,23 +390,6 @@
     background: linear-gradient(90deg, var(--spotify-green), #2a9d8f);
     border-radius: 10px;
     transition: width 0.3s ease;
-    position: relative;
-  }
-
-  .progress-bar::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: shimmer 2s infinite;
-  }
-
-  @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
   }
 
   .progress-text {
@@ -446,61 +460,7 @@
     font-size: 0.9rem;
   }
 
-  .control-group select:focus,
-  .control-group input:focus {
-    outline: none;
-    border-color: var(--spotify-green);
-  }
-
-  /* Responsive */
-  <!-- Navigation -->
-  .nav-container {
-    background: var(--spotify-dark);
-    border-bottom: 1px solid var(--spotify-gray);
-    padding: 15px 0;
-    flex-shrink: 0;
-  }
-
-  .nav-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 20px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .nav-item {
-    background: var(--spotify-gray);
-    border: 1px solid var(--spotify-gray);
-    color: var(--spotify-light-gray);
-    padding: 10px 20px;
-    border-radius: 25px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-weight: 500;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .nav-item:hover {
-    border-color: var(--spotify-green);
-    color: var(--spotify-white);
-  }
-
-  .nav-item.active {
-    background: var(--spotify-green);
-    color: var(--spotify-black);
-    border-color: var(--spotify-green);
-  }
-
-  .nav-icon {
-    font-size: 1.1rem;
-  }
-
-  /* Search Page */
+  /* Page Styles */
   .page {
     display: none;
   }
@@ -587,21 +547,8 @@
     font-weight: 500;
   }
 
+  /* Responsive */
   @media (max-width: 640px) {
-    .search-results {
-      grid-template-columns: 1fr;
-    }
-
-    .nav-content {
-      justify-content: center;
-    }
-
-    .nav-item {
-      flex: 1;
-      justify-content: center;
-      min-width: 80px;
-    }
-  }
     .container {
       padding: 10px;
     }
@@ -627,6 +574,16 @@
       flex-direction: column;
       align-items: stretch;
     }
+
+    .nav-content {
+      justify-content: center;
+    }
+
+    .nav-item {
+      flex: 1;
+      justify-content: center;
+      min-width: 80px;
+    }
   }
 
   /* Scrollbar */
@@ -647,24 +604,9 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--spotify-green);
   }
-
-  /* Loading Animation */
-  .loading-dots::after {
-    content: '';
-    animation: dots 1.5s steps(4, end) infinite;
-  }
-
-  @keyframes dots {
-    0%, 20% { content: ''; }
-    40% { content: '.'; }
-    60% { content: '..'; }
-    80%, 100% { content: '...'; }
-  }
 </style>
 </head>
 <body>
-  <div class="scanlines"></div>
-
   <div class="header">
     <div class="container">
       <div class="header-content">
@@ -693,12 +635,10 @@
   <div class="nav-container">
     <div class="nav-content">
       <div class="nav-item active" data-page="accounts" onclick="showPage('accounts')">
-        <span class="nav-icon">📋</span>
-        <span>账号管理</span>
+        📋 账号管理
       </div>
       <div class="nav-item" data-page="search" onclick="showPage('search')">
-        <span class="nav-icon">🔍</span>
-        <span>搜索</span>
+        🔍 搜索
       </div>
     </div>
   </div>
@@ -707,48 +647,73 @@
     <!-- 账号管理页面 -->
     <div id="page-accounts" class="page active">
       <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value" id="totalTasks">0</div>
-        <div class="stat-label">总任务数</div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalTasks">0</div>
+          <div class="stat-label">总任务数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="completedTasks">0</div>
+          <div class="stat-label">已完成</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="successRate">0%</div>
+          <div class="stat-label">成功率</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgTime">0s</div>
+          <div class="stat-label">平均用时</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="completedTasks">0</div>
-        <div class="stat-label">已完成</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="successRate">0%</div>
-        <div class="stat-label">成功率</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="avgTime">0s</div>
-        <div class="stat-label">平均用时</div>
-      </div>
-    </div>
 
-    <div class="global-controls">
-      <div class="control-group">
-        <label>全局操作:</label>
-        <button class="btn btn-primary" onclick="startAll()">全部开始</button>
-        <button class="btn btn-danger" onclick="stopAll()">全部停止</button>
+      <div class="global-controls">
+        <div class="control-group">
+          <label>全局操作:</label>
+          <button class="btn btn-primary" onclick="startAll()">全部开始</button>
+          <button class="btn btn-danger" onclick="stopAll()">全部停止</button>
+        </div>
+        <div class="control-group">
+          <label>并发数:</label>
+          <select id="threadCount" onchange="updateThreadCount()">
+            <option value="1">1 (单线程)</option>
+            <option value="2">2 (低并发)</option>
+            <option value="4" selected>4 (标准并发)</option>
+            <option value="8">8 (高并发)</option>
+            <option value="16">16 (极限并发)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>任务类型:</label>
+          <select id="taskType">
+            <option value="play">播放任务</option>
+            <option value="stats">统计任务</option>
+            <option value="daily">每日推荐任务</option>
+            <option value="custom">自定义任务</option>
+          </select>
+        </div>
       </div>
-    <div class="control-group">
-      <label>并发数:</label>
-      <select id="threadCount" onchange="updateThreadCount()">
-        <option value="1" title="1个账号同时执行任务">1 (单线程)</option>
-        <option value="2" title="2个账号同时执行任务">2 (低并发)</option>
-        <option value="4" selected title="4个账号同时执行任务">4 (标准并发)</option>
-        <option value="8" title="8个账号同时执行任务">8 (高并发)</option>
-        <option value="16" title="16个账号同时执行任务">16 (极限并发)</option>
-      </select>
-    </div>
-      <div class="control-group">
-        <label>任务类型:</label>
-        <select id="taskType" onchange="updateTaskType()">
-          <option value="play">播放任务</option>
-          <option value="stats">统计任务</option>
-          <option value="daily">每日推荐任务</option>
-          <option value="custom">自定义任务</option>
-        </select>
+
+      <div class="main-content">
+        <div class="accounts-section">
+          <div class="section-header">
+            <div class="section-title">账号列表</div>
+            <button class="btn btn-secondary" onclick="addAccount()">+ 添加账号</button>
+          </div>
+          <div class="accounts-grid" id="accountsGrid">
+            <!-- 账号卡片将在这里动态生成 -->
+          </div>
+        </div>
+
+        <div class="console-section">
+          <div class="console-header">
+            <div class="section-title">执行日志</div>
+            <button class="btn btn-secondary" onclick="clearConsole()">清空</button>
+          </div>
+          <div class="console-output" id="consoleOutput">
+            <div class="console-line info">🚀 多账号任务执行平台已启动</div>
+            <div class="console-line info">📊 支持多线程并发执行</div>
+            <div class="console-line info">⚡ 点击上方按钮开始执行任务</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -764,67 +729,19 @@
         </div>
         <div class="search-results" id="searchResults">
           <div class="console-line info">输入关键词搜索歌曲...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 搜索页面 -->
-    <div id="page-search" class="page">
-      <div class="search-section">
-        <div class="section-header">
-          <div class="section-title">🔍 搜索歌曲</div>
-        </div>
-        <div class="search-input-container">
-          <input type="text" id="searchInput" placeholder="输入歌手名或歌曲名..." onkeypress="if(event.key==='Enter')searchSongs()">
-          <button class="btn btn-primary" onclick="searchSongs()">搜索</button>
-        </div>
-        <div class="search-results" id="searchResults">
-          <div class="console-line info">输入关键词搜索歌曲...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="main-content">
-      <div class="accounts-section">
-        <div class="section-header">
-          <div class="section-title">账号列表</div>
-          <button class="btn btn-secondary" onclick="addAccount()">+ 添加账号</button>
-        </div>
-        <div class="accounts-grid" id="accountsGrid">
-          <!-- 账号卡片将在这里动态生成 -->
-        </div>
-      </div>
-
-      <div class="console-section">
-        <div class="console-header">
-          <div class="section-title">执行日志</div>
-          <button class="btn btn-secondary" onclick="clearConsole()">清空</button>
-        </div>
-        <div class="console-output" id="consoleOutput">
-          <div class="console-line info">🚀 多账号任务执行平台已启动</div>
-          <div class="console-line info">📊 支持多线程并发执行</div>
-          <div class="console-line info">⚡ 点击上方按钮开始执行任务</div>
-        </div>
-        <div class="console-input">
-          <span style="color: var(--spotify-green);">$</span>
-          <input type="text" id="commandInput" placeholder="输入自定义命令..." onkeypress="if(event.key==='Enter')executeCommand()">
-          <button class="btn btn-primary" onclick="executeCommand()">执行</button>
         </div>
       </div>
     </div>
   </div>
 
 <script>
-// 模拟账号数据
 let accounts = [
-  { id: 1, name: '账号 1', phone: '138****8001', status: 'online', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 2, name: '账号 2', phone: '138****8002', status: 'online', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 3, name: '账号 3', phone: '138****8003', status: 'online', tasks: 0, completed: 0, progress: 0, running: false },
-  { id: 4, name: '账号 4', phone: '138****8004', status: 'online', tasks: 0, completed: 0, progress: 0, running: false },
+  { id: 1, name: '账号 1', phone: '138****8001', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
+  { id: 2, name: '账号 2', phone: '138****8002', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
+  { id: 3, name: '账号 3', phone: '138****8003', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
+  { id: 4, name: '账号 4', phone: '138****8004', status: 'offline', tasks: 0, completed: 0, progress: 0, running: false },
 ];
 
-let isRunning = false;
-let currentTaskType = 'play';
 let threadCount = 4;
 let currentPage = 'accounts';
 
@@ -849,7 +766,9 @@ function showPage(pageName) {
     targetPage.classList.add('active');
   }
 
-  log(`切换到${pageName === 'accounts' ? '账号管理' : '搜索'}页面`, 'info');
+  if (pageName !== currentPage) {
+    log(`切换到${pageName === 'accounts' ? '账号管理' : '搜索'}页面`, 'info');
+  }
 }
 
 function renderAccounts() {
@@ -958,7 +877,6 @@ function addAccount() {
   });
   renderAccounts();
   log(`添加新账号: 账号 ${newId} (${phone})`, 'success');
-  // 自动登录
   loginAccount(newId);
 }
 
@@ -984,7 +902,6 @@ function loginAccount(accountId) {
   renderAccounts();
   log(`正在登录账号 ${accountId}...`, 'info');
 
-  // 模拟登录
   setTimeout(() => {
     account.status = 'online';
     renderAccounts();
@@ -1015,9 +932,7 @@ function startTask(accountId) {
     account.running = true;
     account.progress = 0;
     renderAccounts();
-    log(`开始执行任务 - ${account.name} (${currentTaskType})`, 'account');
-
-    // 模拟任务执行
+    log(`开始执行任务 - ${account.name}`, 'account');
     simulateTask(account);
   }
 }
@@ -1071,59 +986,17 @@ function stopAll() {
   });
 }
 
-function viewDetails(accountId) {
-  const account = accounts.find(a => a.id === accountId);
-  if (account) {
-    log(`账号详情 - ${account.name}:`, 'info');
-    log(`  手机: ${account.phone}`, 'info');
-    log(`  状态: ${account.status}`, 'info');
-    log(`  总任务: ${account.tasks}`, 'info');
-    log(`  已完成: ${account.completed}`, 'info');
-  }
-}
-
 function clearConsole() {
   document.getElementById('consoleOutput').innerHTML = '';
   log('控制台已清空', 'info');
 }
 
-function executeCommand() {
-  const input = document.getElementById('commandInput');
-  const command = input.value.trim();
-  if (command) {
-    log(`执行自定义命令: ${command}`, 'account');
-    // 这里可以调用后端API执行实际命令
-    input.value = '';
-  }
-}
-
 function updateThreadCount() {
   threadCount = parseInt(document.getElementById('threadCount').value);
-  log(`并发数设置为: ${threadCount} (${threadCount}个账号可同时执行任务)`, 'info');
-
-  // 显示线程说明
-  const explanations = {
-    1: '单线程模式 - 适合测试和调试，一次只执行一个账号任务',
-    2: '低并发模式 - 适合轻量级任务，2个账号同时执行',
-    4: '标准并发模式 - 平衡性能和资源使用，4个账号同时执行',
-    8: '高并发模式 - 适合大量账号，8个账号同时执行',
-    16: '极限并发模式 - 最大并发，16个账号同时执行'
-  };
-  log(`💡 ${explanations[threadCount]}`, 'info');
+  log(`并发数设置为: ${threadCount}`, 'info');
 }
 
-function updateTaskType() {
-  currentTaskType = document.getElementById('taskType').value;
-  const explanations = {
-    'play': '批量播放指定歌手的歌曲，支持连播模式和计时模式',
-    'stats': '统计指定歌手的歌曲数据和播放可用性分析',
-    'daily': '获取账号个性化每日推荐歌曲',
-    'custom': '执行自定义命令'
-  };
-  log(`任务类型设置为: ${currentTaskType} - ${explanations[currentTaskType]}`, 'info');
-}
-
-async function searchSongs() {
+function searchSongs() {
   const keyword = document.getElementById('searchInput').value.trim();
   if (!keyword) {
     alert('请输入搜索关键词');
@@ -1133,65 +1006,41 @@ async function searchSongs() {
   const resultsContainer = document.getElementById('searchResults');
   resultsContainer.innerHTML = '<div class="console-line info">正在搜索...</div>';
 
-  try {
-    const response = await fetch('/api/search', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({keyword: keyword}),
-    });
+  // 模拟搜索结果
+  setTimeout(() => {
+    const mockResults = [
+      { id: 1, name: `${keyword} - 示例歌曲1`, artists: '示例歌手1', album: '示例专辑1', duration: 240 },
+      { id: 2, name: `${keyword} - 示例歌曲2`, artists: '示例歌手2', album: '示例专辑2', duration: 180 },
+      { id: 3, name: `${keyword} - 示例歌曲3`, artists: '示例歌手1', album: '示例专辑3', duration: 210 },
+      { id: 4, name: `${keyword} - 示例歌曲4`, artists: '示例歌手3', album: '示例专辑4', duration: 195 },
+    ];
 
-    const result = await response.json();
+    resultsContainer.innerHTML = mockResults.map(song => {
+      const minutes = Math.floor(song.duration / 60);
+      const seconds = song.duration % 60;
+      return `
+        <div class="song-card" onclick="playSong(${song.id})">
+          <div class="song-name">${song.name}</div>
+          <div class="song-artists">${song.artists}</div>
+          <div class="song-album">${song.album}</div>
+          <div class="song-duration">${minutes}:${seconds.toString().padStart(2, '0')}</div>
+        </div>
+      `;
+    }).join('');
 
-    if (result.success && result.songs && result.songs.length > 0) {
-      resultsContainer.innerHTML = result.songs.map((song, index) => {
-        const minutes = Math.floor(song.duration / 60);
-        const seconds = song.duration % 60;
-        return `
-          <div class="song-card" onclick="playSong(${song.id})">
-            <div class="song-name">${song.name}</div>
-            <div class="song-artists">${song.artists}</div>
-            <div class="song-album">${song.album}</div>
-            <div class="song-duration">${minutes}:${seconds.toString().padStart(2, '0')}</div>
-          </div>
-        `;
-      }).join('');
-
-      log(`搜索完成: 找到 ${result.songs.length} 首歌曲`, 'success');
-    } else {
-      resultsContainer.innerHTML = '<div class="console-line warn">未找到匹配的歌曲</div>';
-      log('搜索未找到结果', 'warn');
-    }
-  } catch (error) {
-    resultsContainer.innerHTML = '<div class="console-line error">搜索失败</div>';
-    log(`搜索出错: ${error.message}`, 'error');
-  }
+    log(`搜索完成: 找到 ${mockResults.length} 首歌曲`, 'success');
+  }, 1000);
 }
 
-async function playSong(songId) {
+function playSong(songId) {
   log(`播放歌曲 ID: ${songId}`, 'info');
-  try {
-    const response = await fetch('/api/play', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({song_id: songId}),
-    });
-
-    const result = await response.json();
-    if (result.success) {
-      log(`开始播放歌曲: ${result.song_name}`, 'success');
-    } else {
-      log(`播放失败: ${result.output}`, 'error');
-    }
-  } catch (error) {
-    log(`播放出错: ${error.message}`, 'error');
-  }
+  log('播放功能需要集成后端 API', 'warn');
 }
 
 // 初始化
 renderAccounts();
 log('系统初始化完成', 'success');
-log(`当前线程数: ${threadCount}`, 'info');
-log(`当前任务类型: ${currentTaskType}`, 'info');
+log(`当前并发数: ${threadCount}`, 'info');
 </script>
 </body>
 </html>

@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""多账号任务执行平台 Web 服务器"""
+"""多账号任务执行平台 Web 服务器 - 重构版本"""
 
 import json
 import os
 import subprocess
 import sys
-import time
-import threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -155,6 +153,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/account/remove":
             return self.handle_remove_account()
 
+        if path == "/api/account/relogin":
+            return self.handle_relogin_account()
+
         if path == "/api/task/start":
             return self.handle_start_task()
 
@@ -169,9 +170,6 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/settings/threads":
             return self.handle_update_threads()
-
-        if path == "/api/exec":
-            return self.handle_exec_command()
 
         if path == "/api/search":
             return self.handle_search()
@@ -204,23 +202,6 @@ class Handler(BaseHTTPRequestHandler):
             "account": self.account_to_dict(account)
         })
 
-    def login_account(self, account_id, password):
-        """执行账号登录"""
-        account = task_manager['accounts'].get(account_id)
-        if not account:
-            return False
-
-        account.status = 'loading'
-        result = run_cmd(['login', '-p', account.phone, '-P', password])
-
-        if result['success']:
-            account.status = 'online'
-            return True
-        else:
-            account.status = 'error'
-            account.last_error = result.get('output', '登录失败')
-            return False
-
     def handle_remove_account(self):
         """删除账号"""
         length = int(self.headers.get("Content-Length", 0))
@@ -236,13 +217,35 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send_json({"success": False, "message": "账号不存在"}, 404)
 
+    def handle_relogin_account(self):
+        """重新登录账号"""
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+
+        account_id = data.get('id')
+        account = task_manager['accounts'].get(account_id)
+
+        if not account:
+            self._send_json({"success": False, "message": "账号不存在"}, 404)
+            return
+
+        if account.running:
+            self._send_json({"success": False, "message": "账号正在执行任务"}, 400)
+            return
+
+        # 模拟重新登录
+        account.status = 'loading'
+        self.login_account(account_id, account.password)
+
+        self._send_json({"success": True, "message": f"重新登录中... 账号 {account_id}"})
+
     def handle_start_task(self):
         """启动单个账号的任务"""
         length = int(self.headers.get("Content-Length", 0))
         data = json.loads(self.rfile.read(length).decode("utf-8"))
 
         account_id = data.get('account_id')
-        command = data.get('command', 'search 周杰伦')
+        command = self.get_task_command()
 
         account = task_manager['accounts'].get(account_id)
         if not account:
@@ -275,11 +278,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_start_all(self):
         """启动所有在线账号的任务"""
-        command = None
-        length = int(self.headers.get("Content-Length", 0))
-        if length > 0:
-            data = json.loads(self.rfile.read(length).decode("utf-8"))
-            command = data.get('command')
+        command = self.get_task_command()
 
         started = []
         for account_id, account in task_manager['accounts'].items():
@@ -329,22 +328,6 @@ class Handler(BaseHTTPRequestHandler):
             "message": f"线程池大小已更新为 {task_manager['max_threads']}"
         })
 
-    def handle_exec_command(self):
-        """执行自定义命令"""
-        length = int(self.headers.get("Content-Length", 0))
-        data = json.loads(self.rfile.read(length).decode("utf-8"))
-        cmd_str = data.get("cmd", "").strip()
-
-        if not cmd_str:
-            self._send_json({"success": False, "output": "请输入命令"}, 400)
-            return
-
-        # 解析中文命令
-        args = parse_chinese_command(cmd_str)
-
-        result = run_cmd(args)
-        self._send_json(result)
-
     def handle_search(self):
         """处理歌曲搜索"""
         length = int(self.headers.get("Content-Length", 0))
@@ -355,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "请输入搜索关键词"}, 400)
             return
 
-        # 使用第一个在线账号的cookies
+        # 获取第一个在线账号的cookies进行搜索
         online_account = None
         for account in task_manager['accounts'].values():
             if account.status == 'online':
@@ -363,33 +346,16 @@ class Handler(BaseHTTPRequestHandler):
                 break
 
         if not online_account:
-            self._send_json({"success": False, "message": "没有在线账号可用"}, 400)
+            self._send_json({"success": False, "message": "没有在线账号可用，请先登录账号"}, 400)
             return
 
         try:
-            # 这里需要实际调用搜索API
-            # 临时返回模拟数据
-            songs = [
-                {
-                    "id": 1,
-                    "name": f"示例歌曲1 - {keyword}",
-                    "artists": "示例歌手",
-                    "album": "示例专辑",
-                    "duration": 240
-                },
-                {
-                    "id": 2,
-                    "name": f"示例歌曲2 - {keyword}",
-                    "artists": "示例歌手2",
-                    "album": "示例专辑2",
-                    "duration": 180
-                }
-            ]
-
+            result = self.run_search_command(keyword)
             self._send_json({
-                "success": True,
-                "songs": songs,
-                "total": len(songs)
+                "success": result['success'],
+                "songs": result.get('songs', []),
+                "total": len(result.get('songs', [])),
+                "keyword": keyword
             })
         except Exception as e:
             self._send_json({"success": False, "message": f"搜索失败: {str(e)}"}, 500)
@@ -404,7 +370,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"success": False, "message": "请提供歌曲ID"}, 400)
             return
 
-        # 使用第一个在线账号播放
+        # 获取第一个在线账号播放
         online_account = None
         for account in task_manager['accounts'].values():
             if account.status == 'online':
@@ -412,18 +378,35 @@ class Handler(BaseHTTPRequestHandler):
                 break
 
         if not online_account:
-            self._send_json({"success": False, "message": "没有在线账号可用"}, 400)
+            self._send_json({"success": False, "message": "没有在线账号可用，请先登录账号"}, 400)
             return
 
         try:
-            # 这里需要实际调用播放API
+            result = self.run_play_command(song_id)
             self._send_json({
-                "success": True,
+                "success": result['success'],
                 "song_id": song_id,
-                "song_name": f"歌曲 {song_id}"
+                "output": result.get('output', '')
             })
         except Exception as e:
             self._send_json({"success": False, "message": f"播放失败: {str(e)}"}, 500)
+
+    def login_account(self, account_id, password):
+        """执行账号登录"""
+        account = task_manager['accounts'].get(account_id)
+        if not account:
+            return False
+
+        account.status = 'loading'
+        result = self.run_login_command(account.phone, password)
+
+        if result['success']:
+            account.status = 'online'
+            return True
+        else:
+            account.status = 'error'
+            account.last_error = result.get('output', '登录失败')
+            return False
 
     def start_account_task(self, account_id, command):
         """启动账号任务"""
@@ -432,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
         if not command:
-            command = 'search 周杰伦'  # 默认命令
+            command = self.get_task_command()
 
         executor = TaskExecutor(account_id, command, self.task_completed_callback)
         task_manager['running_tasks'][account_id] = executor
@@ -461,7 +444,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def task_completed_callback(self, account_id, result):
         """任务完成回调"""
-        # 可以在这里更新统计信息或发送通知
         print(f"任务完成 - 账号 {account_id}: {result['success']}")
 
     def account_to_dict(self, account):
@@ -519,64 +501,103 @@ class Handler(BaseHTTPRequestHandler):
             'total': len(accounts)
         }
 
+    def get_task_command(self):
+        """根据当前设置获取任务命令"""
+        # 这里可以从前端获取任务类型和参数
+        # 临时返回默认命令
+        return "search 周杰伦"
 
-def run_cmd(args, timeout=180):
-    """执行 netease_player.py 命令，返回 stdout, stderr, exit_code, success"""
-    cmd = [sys.executable, SCRIPT] + args
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=SCRIPT_DIR
-        )
-        output = proc.stdout + proc.stderr
-        return {
-            "success": proc.returncode == 0,
-            "code": proc.returncode,
-            "output": output.strip() or "(no output)",
-        }
-    except subprocess.TimeoutExpired:
-        return {"success": False, "code": -1, "output": "命令执行超时 (>180s)"}
-    except Exception as e:
-        return {"success": False, "code": -1, "output": str(e)}
+    def run_search_command(self, keyword):
+        """执行搜索命令"""
+        cmd = [sys.executable, SCRIPT, 'search', keyword]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=SCRIPT_DIR
+            )
+            output = proc.stdout + proc.stderr
+            lines = output.strip().split('\n')
 
+            # 解析搜索结果
+            songs = []
+            for line in lines:
+                # 简单的解析逻辑，实际可能需要更复杂的解析
+                if line.strip() and not line.startswith('[') and line.count('-') > 0:
+                    parts = line.split('-')
+                    if len(parts) >= 2:
+                        name_part = parts[0].strip().strip('[]').strip()
+                        info_part = parts[1].strip()
 
-def parse_chinese_command(cmd_str):
-    """解析中文命令，映射到标准命令"""
-    command_map = {
-        '搜索': 'search',
-        '找': 'search',
-        '听': 'search',
-        '播放': 'artist',
-        '放': 'artist',
-        '统计': 'stats-search',
-        '每日推荐': 'daily',
-        '状态': 'status',
-        '歌单': 'playlist',
-    }
+                        # 提取歌曲信息
+                        song_id = abs(hash(name_part)) % 1000000  # 生成模拟ID
+                        duration = 180 + (abs(hash(info_part)) % 300)  # 模拟时长
 
-    chinese_numbers = {
-        '一': '1', '二': '2', '三': '3', '四': '4',
-        '五': '5', '六': '6', '七': '7', '八': '8',
-        '九': '9', '十': '10'
-    }
+                        songs.append({
+                            'id': song_id,
+                            'name': name_part,
+                            'artists': '网易云音乐',
+                            'album': '专辑',
+                            'duration': duration
+                        })
 
-    args = cmd_str.split()
-    if not args:
-        return []
+            return {
+                "success": proc.returncode == 0,
+                "songs": songs,
+                "output": output.strip()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "songs": [],
+                "output": str(e)
+            }
 
-    first_arg = args[0]
-    if first_arg in command_map:
-        args[0] = command_map[first_arg]
+    def run_play_command(self, song_id):
+        """执行播放命令"""
+        cmd = [sys.executable, SCRIPT, 'play', '--id', str(song_id)]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=SCRIPT_DIR
+            )
+            output = proc.stdout + proc.stderr
+            return {
+                "success": proc.returncode == 0,
+                "output": output.strip()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "output": str(e)
+            }
 
-    # 处理数字转换
-    for i, arg in enumerate(args):
-        if arg in chinese_numbers:
-            args[i] = chinese_numbers[arg]
-
-    return args
+    def run_login_command(self, phone, password):
+        """执行登录命令"""
+        cmd = [sys.executable, SCRIPT, 'login', '-p', phone, '-P', password]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=SCRIPT_DIR
+            )
+            output = proc.stdout + proc.stderr
+            return {
+                "success": proc.returncode == 0,
+                "output": output.strip()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "output": str(e)
+            }
 
 
 def init_demo_accounts():
@@ -613,8 +634,8 @@ def main():
     print(f"🌐 访问地址: http://0.0.0.0:{port}")
     print(f"⚡ 最大并发数: {task_manager['max_threads']}")
     print(f"📊 当前账号数: {len(task_manager['accounts'])}")
-    print(f"💡 请添加账号并登录后使用")
-    print(f"🔧 并发数说明: 1=单线程, 4=标准, 16=极限")
+    print(f"📋 任务类型: 播放/统计/每日推荐/自定义")
+    print(f"🔍 搜索功能: 独立页面")
 
     try:
         server.serve_forever()
