@@ -17,7 +17,7 @@ import requests
 from Cryptodome.Cipher import AES
 
 CONFIG_DIR = Path.home() / ".netease_player"
-COOKIE_FILE = CONFIG_DIR / "cookies.pkl"
+COOKIE_FILE = CONFIG_DIR / "cookies.json"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 MODULUS = (
@@ -55,6 +55,8 @@ def _rsa_encrypt(text, pubkey, modulus):
 
 def _encrypt_params(data):
     if isinstance(data, dict):
+        data = json.dumps(data)
+    elif not isinstance(data, str):
         data = json.dumps(data)
     data_bytes = data.encode("utf-8")
     secret = binascii.hexlify(os.urandom(16))[:16]
@@ -611,7 +613,8 @@ def check_playable(song_id, cookies=None):
     if info.get("code") == 200 and info.get("url"):
         return True, info["url"], f"{info.get('br', 0) // 1000}kbps"
     reason_map = {-110: "无版权", -104: "需VIP", -100: "已下架"}
-    return False, None, reason_map.get(info.get("code"), f"不可用(code={info.get('code')})")
+    raw_code = info.get("code")
+    return False, None, reason_map.get(raw_code, "不可用")
 
 
 def stats_artist(keyword, max_results=50):
