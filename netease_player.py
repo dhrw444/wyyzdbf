@@ -38,10 +38,14 @@ USER_AGENTS = [
 
 
 def _aes_encrypt(text, key):
+    if isinstance(text, str):
+        text = text.encode("utf-8")
+    if isinstance(key, str):
+        key = key.encode("utf-8")
     pad = 16 - len(text) % 16
     text = text + bytearray([pad] * pad)
     encryptor = AES.new(key, AES.MODE_CBC, b"0102030405060708")
-    return base64.b64encode(encryptor.encrypt(text)).decode()
+    return base64.b64encode(encryptor.encrypt(text))
 
 
 def _rsa_encrypt(text, pubkey, modulus):
@@ -55,7 +59,7 @@ def _encrypt_params(data):
         data = json.dumps(data)
     data_bytes = data.encode("utf-8")
     secret = binascii.hexlify(os.urandom(16))[:16]
-    params = _aes_encrypt(_aes_encrypt(data_bytes, NONCE), secret)
+    params = _aes_encrypt(_aes_encrypt(data_bytes, NONCE), secret).decode()
     enc_sec_key = _rsa_encrypt(secret, PUBKEY, MODULUS)
     return {"params": params, "encSecKey": enc_sec_key}
 
@@ -144,16 +148,22 @@ def login_email(email, password):
 def login_qr():
     session = requests.Session()
 
-    # 生成 key
     key_data = _api_post("https://music.163.com/weapi/login/qrcode/unikey", {"type": "1"})
     unikey = key_data.get("unikey")
     if not unikey:
         sys.exit(f"获取二维码 key 失败: {key_data}")
 
-    # 生成二维码 URL
     qr_url = f"https://music.163.com/login?codekey={unikey}"
-    print(f"\n请用网易云音乐 APP 扫描二维码登录:\n{qr_url}\n")
-    print("等待扫码确认...")
+    try:
+        import qrcode as qrlib
+        qr = qrlib.QRCode()
+        qr.add_data(qr_url)
+        qr.make()
+        qr.print_ascii()
+    except ImportError:
+        pass
+    print(f"\n链接: {qr_url}")
+    print("请用网易云音乐 APP 扫描上方二维码登录...")
 
     for _ in range(60):
         result = _api_post(
@@ -489,6 +499,118 @@ def _download_audio(url, title=""):
         return False
 
 
+# ---------- 统计 ----------
+
+def search_all_songs(keyword, max_results=50):
+    """搜索歌手/关键词，获取尽可能多的歌曲"""
+    all_songs = []
+    offset = 0
+    while len(all_songs) < max_results:
+        remain = max_results - len(all_songs)
+        batch = min(remain, 30)
+        data = {
+            "s": keyword,
+            "type": "1",
+            "limit": str(batch),
+            "offset": str(offset),
+            "total": "true",
+        }
+        result = _api_post(
+            "https://music.163.com/weapi/cloudsearch/get/web",
+            data,
+            cookies=get_session().cookies if get_session() else {},
+        )
+        if result.get("code") != 200:
+            break
+        songs = result.get("result", {}).get("songs", [])
+        if not songs:
+            break
+        for song in songs:
+            artists = "/".join(a.get("name", "") for a in song.get("ar", []))
+            duration = song.get("dt", 0) // 1000
+            all_songs.append({
+                "id": song["id"],
+                "name": song["name"],
+                "artists": artists,
+                "album": song.get("al", {}).get("name", "N/A"),
+                "duration": duration,
+            })
+        offset += batch
+    return all_songs
+
+
+def check_playable(song_id):
+    """检测单首歌曲是否可播放"""
+    data = {"ids": f"[{song_id}]", "level": "standard", "encodeType": "aac"}
+    result = _api_post(
+        "https://music.163.com/weapi/song/enhance/player/url/v1",
+        data,
+        cookies=get_session().cookies if get_session() else {},
+    )
+    if result.get("code") != 200:
+        return False, None, ""
+    info = result.get("data", [{}])[0]
+    if info.get("code") == 200 and info.get("url"):
+        return True, info["url"], f"{info.get('br', 0) // 1000}kbps"
+    reason_map = {-110: "无版权", -104: "需VIP", -100: "已下架"}
+    return False, None, reason_map.get(info.get("code"), f"不可用(code={info.get('code')})")
+
+
+def stats_artist(keyword, max_results=50):
+    """统计某歌手/关键词的歌曲数和总时长"""
+    print(f"\n正在搜索: {keyword} ...")
+    songs = search_all_songs(keyword, max_results)
+    if not songs:
+        print("未找到歌曲")
+        return None
+
+    total_duration = sum(s["duration"] for s in songs)
+    total_min, total_sec = divmod(total_duration, 60)
+    total_hour = total_min // 60
+    total_min = total_min % 60
+
+    print(f"\n===== 搜索结果统计 =====")
+    print(f"匹配歌曲: {len(songs)} 首")
+    print(f"总时长: {total_hour}小时{total_min}分{total_sec}秒")
+    print(f"========================\n")
+
+    print("歌曲列表:")
+    for i, s in enumerate(songs):
+        m, sec = divmod(s["duration"], 60)
+        print(f"  [{i}] {s['name']} - {s['artists']} [{m}:{sec:02d}]")
+
+    # 检测可播放性
+    print(f"\n正在检测可播放歌曲...")
+    playable = []
+    unplayable = []
+    for i, s in enumerate(songs):
+        ok, url, info = check_playable(s["id"])
+        if ok:
+            playable.append({**s, "url": url, "quality": info})
+        else:
+            unplayable.append({**s, "reason": info})
+        pct = (i + 1) / len(songs) * 100
+        print(f"\r检测进度: {i+1}/{len(songs)} ({pct:.0f}%)", end="", flush=True)
+
+    p_duration = sum(s["duration"] for s in playable)
+    p_min, p_sec = divmod(p_duration, 60)
+
+    u_duration = sum(s["duration"] for s in unplayable)
+    u_min, u_sec = divmod(u_duration, 60)
+
+    print(f"\n\n===== 可播放性分析 =====")
+    print(f"可播放: {len(playable)} 首, 总时长 {p_min}分{p_sec}秒")
+    print(f"不可播放: {len(unplayable)} 首, 总时长 {u_min}分{u_sec}秒")
+
+    if unplayable:
+        print(f"\n不可播放歌曲:")
+        for s in unplayable:
+            m, sec = divmod(s["duration"], 60)
+            print(f"  {s['name']} - {s['artists']} [{m}:{sec:02d}] ({s.get('reason', '未知')})")
+
+    return {"songs": songs, "playable": playable, "unplayable": unplayable}
+
+
 # ---------- CLI ----------
 
 def _fmt_duration(sec):
@@ -507,6 +629,7 @@ def main():
   python netease_player.py login -p user@example.com     # 邮箱登录
   python netease_player.py login --qr                    # 二维码登录
   python netease_player.py search 周杰伦                  # 搜索歌曲
+  python netease_player.py stats 周杰伦                   # 统计歌手歌曲数/时长+可播放分析
   python netease_player.py playlist                      # 我的歌单
   python netease_player.py daily                         # 每日推荐
   python netease_player.py play --id 123456              # 按ID播放
@@ -539,6 +662,10 @@ def main():
 
     p_daily = sub_cmd.add_parser("daily", help="每日推荐")
     p_daily.add_argument("--lyrics", action="store_true", help="显示歌词")
+
+    p_stats = sub_cmd.add_parser("stats", help="统计歌手歌曲数/时长 + 可播放性")
+    p_stats.add_argument("keyword", help="歌手名或关键词")
+    p_stats.add_argument("-n", "--max", type=int, default=50, help="最大搜索数量")
 
     args = parser.parse_args()
 
@@ -629,6 +756,19 @@ def main():
         if args.lyrics:
             show_lyrics(song["id"])
         play_audio(url, f"{song['name']} - {song['artists']}")
+
+    elif args.cmd == "stats":
+        result = stats_artist(args.keyword, args.max)
+        if result is None:
+            return
+        playable = result["playable"]
+        if not playable:
+            print("\n没有可播放的歌曲")
+            return
+        song = pick_song(playable)
+        if song is None:
+            return
+        play_audio(song["url"], f"{song['name']} - {song['artists']}")
 
 
 if __name__ == "__main__":
