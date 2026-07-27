@@ -461,17 +461,68 @@ def pick_playlist(playlists):
 # ---------- 播放 ----------
 
 def play_audio(url, title=""):
-    players = ["mpv", "ffplay"]
-    for player in players:
-        path = subprocess.run(["which", player], capture_output=True, text=True).stdout.strip()
-        if path:
-            print(f"正在播放: {title}")
-            print(f"(按 q 退出)")
-            try:
-                subprocess.run([path, "--no-video", url])
-            except (subprocess.CalledProcessError, KeyboardInterrupt):
-                print("\n播放已停止")
-            return True
+    """播放单首歌曲，放完后自动结束"""
+    mpv_path = subprocess.run(["which", "mpv"], capture_output=True, text=True).stdout.strip()
+    ffplay_path = subprocess.run(["which", "ffplay"], capture_output=True, text=True).stdout.strip()
+
+    if mpv_path:
+        cmd = [mpv_path, "--no-video", url]
+    elif ffplay_path:
+        cmd = [ffplay_path, "-nodisp", "-autoexit", url]
+    else:
+        print("未找到播放器，正在下载音频...")
+        return _download_audio(url, title)
+
+    print(f"播放: {title}")
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except KeyboardInterrupt:
+        print("\n播放已停止")
+        raise
+    return True
+
+
+def play_n_songs(songs, n):
+    """连续播放前 N 首可播放歌曲"""
+    if n <= 0 or not songs:
+        return
+    count = min(n, len(songs))
+    print(f"\n===== 连续播放 {count} 首 =====")
+    for i, s in enumerate(songs[:count]):
+        m, sec = divmod(s["duration"], 60)
+        print(f"\n[{i+1}/{count}] {s['name']} - {s['artists']} [{m}:{sec:02d}]")
+        try:
+            play_audio(s["url"], f"{s['name']} - {s['artists']}")
+        except KeyboardInterrupt:
+            print("\n播放已终止")
+            return
+    print(f"\n===== 播放完毕，共 {count} 首 =====")
+
+
+def play_n_minutes(songs, minutes):
+    """连续播放直到累计时长达到指定分钟数"""
+    if minutes <= 0 or not songs:
+        return
+    target_sec = minutes * 60
+    acc = 0
+    print(f"\n===== 连续播放 {minutes} 分钟 =====")
+    idx = 0
+    for s in songs:
+        if acc >= target_sec:
+            break
+        idx += 1
+        m, sec = divmod(s["duration"], 60)
+        remain_sec = target_sec - acc
+        remain_m, remain_s = divmod(remain_sec, 60)
+        print(f"\n[{idx}] {s['name']} - {s['artists']} [{m}:{sec:02d}] (已播放 {acc//60}分{acc%60}秒, 剩余 {remain_m}分{remain_s}秒)")
+        try:
+            play_audio(s["url"], f"{s['name']} - {s['artists']}")
+        except KeyboardInterrupt:
+            print("\n播放已终止")
+            return
+        acc += s["duration"]
+    total_m, total_s = divmod(acc, 60)
+    print(f"\n===== 播放完毕，共 {idx} 首，累计 {total_m}分{total_s}秒 =====")
 
     print("未找到 mpv / ffplay，正在下载音频...")
     return _download_audio(url, title)
@@ -630,6 +681,8 @@ def main():
   python netease_player.py login --qr                    # 二维码登录
   python netease_player.py search 周杰伦                  # 搜索歌曲
   python netease_player.py stats 周杰伦                   # 统计歌手歌曲数/时长+可播放分析
+  python netease_player.py stats 周杰伦 --play-n 5        # 统计后连续播放前5首
+  python netease_player.py stats 周杰伦 --play-min 30     # 统计后连续播放30分钟
   python netease_player.py playlist                      # 我的歌单
   python netease_player.py daily                         # 每日推荐
   python netease_player.py play --id 123456              # 按ID播放
@@ -666,6 +719,8 @@ def main():
     p_stats = sub_cmd.add_parser("stats", help="统计歌手歌曲数/时长 + 可播放性")
     p_stats.add_argument("keyword", help="歌手名或关键词")
     p_stats.add_argument("-n", "--max", type=int, default=50, help="最大搜索数量")
+    p_stats.add_argument("--play-n", type=int, default=0, metavar="N", help="统计后连续播放前 N 首")
+    p_stats.add_argument("--play-min", type=int, default=0, metavar="M", help="统计后连续播放 M 分钟")
 
     args = parser.parse_args()
 
@@ -765,10 +820,16 @@ def main():
         if not playable:
             print("\n没有可播放的歌曲")
             return
-        song = pick_song(playable)
-        if song is None:
-            return
-        play_audio(song["url"], f"{song['name']} - {song['artists']}")
+
+        if args.play_n > 0:
+            play_n_songs(playable, args.play_n)
+        elif args.play_min > 0:
+            play_n_minutes(playable, args.play_min)
+        else:
+            song = pick_song(playable)
+            if song is None:
+                return
+            play_audio(song["url"], f"{song['name']} - {song['artists']}")
 
 
 if __name__ == "__main__":
