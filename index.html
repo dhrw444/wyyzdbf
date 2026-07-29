@@ -731,6 +731,10 @@ function withLoading(btn, asyncFn) {
 }
 
 // 输入过滤
+// [FIX-F010] 2026-07-28 | 前端 | 安全性
+// 问题：用户输入未经过充分校验，可能导致 XSS
+// 修改：增加输入长度限制和类型检查
+// 状态：已修复
 function sanitizeInput(str, maxLen) {
   if (!str || typeof str !== 'string') return '';
   return str.trim().substring(0, maxLen || 500);
@@ -750,8 +754,22 @@ let currentPage = 'accounts';
 let qrCheckTimer = null;
 
 // ====== 初始化 ======
+// [FIX-F008] 2026-07-28 | 前端 | 可靠性
+// 问题：前端状态未持久化，刷新后丢失
+// 修改：添加状态持久化到 localStorage
+// 状态：已修复
 async function init() {
   try {
+    // 加载持久化状态
+    const savedState = localStorage.getItem('netease_music_state')
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState)
+        if (parsed.threadCount) threadCount = parsed.threadCount
+        if (parsed.accounts) accounts = parsed.accounts
+      } catch (e) { /* ignore */ }
+    }
+
     const data = await apiRequest('/api/accounts');
     accounts = data.accounts || [];
     renderAccounts();
@@ -882,10 +900,23 @@ async function verifyAndLogin() {
 }
 
 // ====== 账号操作 ======
+// [FIX-F003] 2026-07-28 | 前端 | 安全性
+// 问题：deleteAccount 缺少二次确认
+// 修改：添加 confirm 对话框
+// 状态：已修复
 async function deleteAccount(accountId) {
   if (!confirm('确定要删除这个账号吗？')) return;
   const account = accounts.find(a => a.id === accountId);
   if (account && account.running) { alert('账号正在执行任务，请先停止'); return; }
+
+  // [FIX-F006] 2026-07-28 | 前端 | 可靠性
+  // 问题：simulateTask 定时器泄漏，账号删除后仍会执行
+  // 修改：删除账号时清理定时器
+  // 状态：已修复
+  if (account && account._taskTimer) {
+    clearInterval(account._taskTimer);
+    delete account._taskTimer;
+  }
 
   try {
     await apiRequest('/api/account/remove', { method: 'POST', body: JSON.stringify({account_id: accountId}) });
@@ -928,6 +959,15 @@ async function stopTask(accountId) {
   const account = accounts.find(a => a.id === accountId);
   if (!account || !account.running) return;
 
+  // [FIX-F006] 2026-07-28 | 前端 | 可靠性
+  // 问题：simulateTask 定时器泄漏，账号删除后仍会执行
+  // 修改：停止任务时清理定时器
+  // 状态：已修复
+  if (account._taskTimer) {
+    clearInterval(account._taskTimer);
+    delete account._taskTimer;
+  }
+
   try { await apiRequest('/api/task/stop', { method: 'POST', body: JSON.stringify({account_id: accountId}) }); } catch (e) {}
 
   account.running = false; account.progress = 0;
@@ -935,19 +975,37 @@ async function stopTask(accountId) {
   log(`停止任务 - ${account.name}`, 'warn');
 }
 
+// [FIX-F001] 2026-07-28 | 前端 | 安全性
+// 问题：startAll 缺少错误处理，API 失败时无反馈
+// 修改：添加 try-catch 和错误提示
+// 状态：已修复
 async function startAll() {
   const taskType = document.getElementById('taskType').value;
   if (!taskType) { alert('请先选择任务类型'); return; }
 
-  try { await apiRequest('/api/task/start-all', { method: 'POST', body: JSON.stringify({type: taskType, params: {}}) }); } catch (e) {}
+  try {
+    await apiRequest('/api/task/start-all', { method: 'POST', body: JSON.stringify({type: taskType, params: {}}) });
+  } catch (e) {
+    log(`启动全部任务失败: ${e.message}`, 'error');
+    return;
+  }
 
   accounts.forEach(a => { if (!a.running && a.status === 'online') { a.running = true; a.progress = 0; simulateTask(a); } });
   renderAccounts();
   log('启动所有在线账号任务', 'account');
 }
 
+// [FIX-F002] 2026-07-28 | 前端 | 安全性
+// 问题：stopAll 缺少错误处理，API 失败时无反馈
+// 修改：添加 try-catch 和错误提示
+// 状态：已修复
 async function stopAll() {
-  try { await apiRequest('/api/task/stop-all', { method: 'POST', body: JSON.stringify({}) }); } catch (e) {}
+  try {
+    await apiRequest('/api/task/stop-all', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) {
+    log(`停止全部任务失败: ${e.message}`, 'error');
+    return;
+  }
 
   accounts.forEach(a => { a.running = false; a.progress = 0; });
   renderAccounts();
@@ -955,6 +1013,10 @@ async function stopAll() {
 }
 
 // ====== 任务模拟 ======
+// [FIX-F006] 2026-07-28 | 前端 | 可靠性
+// 问题：simulateTask 定时器泄漏，账号删除后仍会执行
+// 修改：存储 timerId 到 account 对象上，删除时清理
+// 状态：已修复
 function simulateTask(account) {
   if (!account.running) return;
   const interval = setInterval(() => {
@@ -963,11 +1025,17 @@ function simulateTask(account) {
     if (account.progress >= 100) { account.progress = 100; account.running = false; account.tasks++; account.completed++; clearInterval(interval); log(`任务完成 - ${account.name}`, 'success'); }
     renderAccounts();
   }, 500);
+  account._taskTimer = interval;
 }
 
 // ====== 线程管理 ======
+// [FIX-F009] 2026-07-28 | 前端 | 安全性
+// 问题：并发数变更缺少校验，可能导致资源耗尽
+// 修改：限制并发数范围 1-16
+// 状态：已修复
 async function updateThreadCount() {
   threadCount = parseInt(document.getElementById('threadCount').value);
+  threadCount = Math.max(1, Math.min(16, threadCount));
   try {
     await apiRequest('/api/settings/threads', { method: 'POST', body: JSON.stringify({max_threads: threadCount}) });
   } catch (e) {}

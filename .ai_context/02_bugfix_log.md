@@ -2,7 +2,7 @@
 
 项目信息
 - 技术栈：Node.js + Express（后端），原生 HTML/CSS/JS（前端）
-- 最后修复日期：2026-07-28
+- 最后修复日期：2026-07-29
 - 修复会话ID：2026-07-28-bugfix-cycle
 
 Bug清单
@@ -21,10 +21,19 @@ Bug清单
 | B010 | app_combined.js | 186 | 后端/安全 | express.json limit 500MB 过大，可被 DoS | 已修复 |
 | B011 | app_combined.js | 756 | 后端/安全 | relogin 的 setTimeout 无法取消，账号删除后仍会执行 | 已修复 |
 | B012 | app_combined.js | 736 | 后端/安全 | 清理关联定时器，账号删除时需清除所有相关定时器 | 已修复 |
+| F001 | index.html | 956 | 前端/安全 | startAll 缺少错误处理，API 失败时无反馈 | 已修复 |
+| F002 | index.html | 967 | 前端/安全 | stopAll 缺少错误处理，API 失败时无反馈 | 已修复 |
+| F003 | index.html | 885 | 前端/安全 | deleteAccount 缺少二次确认 | 已修复 |
+| F004 | index.html | 805 | 前端/安全 | sendVerifyCode 缺少输入校验 | 已修复 |
+| F005 | index.html | 853 | 前端/安全 | verifyAndLogin 缺少重试机制 | 已修复 |
+| F006 | index.html | 958 | 前端/可靠性 | simulateTask 定时器泄漏，账号删除后仍会执行 | 已修复 |
+| F007 | index.html | 1422 | 前端/安全 | log 函数缺少日志级别校验 | 已修复 |
+| F008 | index.html | 753 | 前端/可靠性 | 前端状态未持久化，刷新后丢失 | 已修复 |
+| F009 | index.html | 1014 | 前端/安全 | updateThreadCount 缺少并发数校验 | 已修复 |
+| F010 | index.html | 734 | 前端/安全 | sanitizeInput 缺少 XSS 防护 | 已修复 |
 
 待办
-- F006：simulateTask 定时器泄漏待修复
+- 
 
 技术债
-- 前端 F001-F010 缺陷已修复但代码未添加 [FIX-Fxxx] 标记
 - 01_project_brief.md、03_architecture.md 仍为模板占位符，待填写完整

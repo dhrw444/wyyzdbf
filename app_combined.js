@@ -735,6 +735,10 @@ async function startServer() {
       if (id !== undefined && state.accounts[id]) {
         // [FIX-B011] 清理关联定时器
         if (state.accounts[id]._reloginTimer) clearTimeout(state.accounts[id]._reloginTimer)
+        if (state.accounts[id]._taskTimer) {
+          clearInterval(state.accounts[id]._taskTimer)
+          delete state.accounts[id]._taskTimer
+        }
         delete state.accounts[id]
         saveState()
         return res.json({ success: true, message: `账号 ${id} 已删除` })
@@ -797,10 +801,14 @@ async function startServer() {
       const id = (req.body || {}).account_id || (req.body || {}).id
       const acc = state.accounts[id]
       if (acc && acc.running) {
-      acc.running = false
-      acc.progress = 0
-      saveState()
-      return res.json({ success: true, message: `任务已停止 - ${acc.name}` })
+        if (acc._taskTimer) {
+          clearInterval(acc._taskTimer)
+          delete acc._taskTimer
+        }
+        acc.running = false
+        acc.progress = 0
+        saveState()
+        return res.json({ success: true, message: `任务已停止 - ${acc.name}` })
       }
       return res.status(400).json({ success: false, message: '没有正在运行的任务' })
     } catch (e) {
@@ -839,6 +847,10 @@ async function startServer() {
       const stopped = []
       for (const acc of Object.values(state.accounts)) {
         if (acc.running) {
+          if (acc._taskTimer) {
+            clearInterval(acc._taskTimer)
+            delete acc._taskTimer
+          }
           acc.running = false
           acc.progress = 0
           stopped.push(acc.id)
@@ -866,23 +878,24 @@ async function startServer() {
   })
 
   // ====== 任务模拟 ======
-  function simulateTask(account) {
-    if (!account.running) return
-    const interval = setInterval(() => {
-      if (!account.running) {
-        clearInterval(interval)
-        return
-      }
-      account.progress += Math.random() * 15
-      if (account.progress >= 100) {
-        account.progress = 100
-        account.running = false
-        account.tasks++
-        account.completed++
-        clearInterval(interval)
-      }
-    }, 500)
-  }
+function simulateTask(account) {
+  if (!account.running) return
+  const interval = setInterval(() => {
+    if (!account.running) {
+      clearInterval(interval)
+      return
+    }
+    account.progress += Math.random() * 15
+    if (account.progress >= 100) {
+      account.progress = 100
+      account.running = false
+      account.tasks++
+      account.completed++
+      clearInterval(interval)
+    }
+  }, 500)
+  account._taskTimer = interval
+}
 
   // ====== 首页和 SPA 回退 ======
   app.get('/', (req, res) => {
