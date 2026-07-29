@@ -1,0 +1,15 @@
+项目简介
+- 项目名称：NetEase Music 多账号任务平台
+- 技术栈：Node.js + Express（后端），原生 HTML/CSS/JS（前端）
+- 后端框架：Express
+- 前端框架：原生 HTML/CSS/JS（无框架，多标签界面）
+- 数据库：无（内存状态 + .state.json 文件持久化）
+- 缓存：无
+- 目录结构：
+  - app_combined.js - 核心入口，集成多模块与路由
+  - module/ - 431+ API 模块（NetEase Music API 代理）
+  - util/ - 工具函数（request.js, logger.js, validator.js, crypto.js 等）
+  - public/ - 静态资源
+  - index.html - 前端多标签 UI 界面
+  - .ai_context/ - AI 上下文与缺陷修复记录
+  - .state.json - 状态持久化文件

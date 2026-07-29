@@ -1,115 +1,111 @@
-# Netease Player
+# MD5
 
-网易云音乐命令行播放器，支持 Linux 服务器无 GUI 环境运行。提供登录、搜索、在线播放、歌单管理和歌手歌曲统计功能。
+[![build status](https://secure.travis-ci.org/pvorb/node-md5.png)](http://travis-ci.org/pvorb/node-md5) [![info badge](https://img.shields.io/npm/dt/md5.svg)](http://npm-stat.com/charts.html?package=md5)
 
-## 安装
+a JavaScript function for hashing messages with MD5.
 
-```bash
-# 克隆仓库
-git clone https://github.com/dhrw444/netease-player.git
-cd netease-player
+node-md5 is being sponsored by the following tool; please help to support us by taking a look and signing up to a free trial  
+<a href="https://tracking.gitads.io/?repo=node-md5"><img src="https://images.gitads.io/node-md5" alt="GitAds"/></a>
 
-# 安装 Python 依赖
-pip3 install --break-system-packages -r requirements.txt
+## Installation
 
-# 安装 ffmpeg（提供 ffplay 播放器）
-DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
-```
+You can use this package on the server side as well as the client side.
 
-## 快速开始
+### [Node.js](http://nodejs.org/):
 
-### 1. 登录
+~~~
+npm install md5
+~~~
 
-```bash
-# 二维码登录（推荐）
-python3 netease_player.py login --qr
 
-# 手机号 + 密码
-python3 netease_player.py login -p 13800138000
+## API
 
-# 手机号 + 短信验证码
-python3 netease_player.py login -p 13800138000 --sms
+~~~ javascript
+md5(message)
+~~~
 
-# 邮箱登录
-python3 netease_player.py login -p user@example.com
+  * `message` -- `String`, `Buffer`, `Array` or `Uint8Array`
+  * returns `String`
 
-# 查看登录状态
-python3 netease_player.py status
-```
 
-### 2. 搜索播放
+## Usage
 
-```bash
-# 搜索歌曲（交互式选择）
-python3 netease_player.py search 周杰伦
+~~~ javascript
+var md5 = require('md5');
 
-# 按歌曲 ID 直接播放
-python3 netease_player.py play --id 186016
+console.log(md5('message'));
+~~~
 
-# 显示歌词
-python3 netease_player.py search 晴天 --lyrics
-```
+This will print the following
 
-### 3. 歌单与每日推荐
+~~~
+78e731027d8fd50ed642340b7c9a63b3
+~~~
 
-```bash
-# 浏览个人歌单
-python3 netease_player.py playlist
+It supports buffers, too
 
-# 每日推荐
-python3 netease_player.py daily
-```
+~~~ javascript
+var fs = require('fs');
+var md5 = require('md5');
 
-### 4. 歌手统计
+fs.readFile('example.txt', function(err, buf) {
+  console.log(md5(buf));
+});
+~~~
 
-统计歌手的歌曲数量、总时长和可播放性。
+## Versions
 
-```bash
-# 搜索统计
-python3 netease_player.py stats-search 周杰伦
+Before version 2.0.0 there were two packages called md5 on npm, one lowercase,
+one uppercase (the one you're looking at). As of version 2.0.0, all new versions
+of this module will go to lowercase [md5](https://www.npmjs.com/package/md5) on
+npm. To use the correct version, users of this module will have to change their
+code from `require('MD5')` to `require('md5')` if they want to use versions >=
+2.0.0.
 
-# 统计后连续播放 5 首
-python3 netease_player.py stats-search 周杰伦 --play-n 5
 
-# 统计后连续播放 30 分钟
-python3 netease_player.py stats-search 周杰伦 --play-min 30
+## Bugs and Issues
 
-# 歌单中某歌手的统计
-python3 netease_player.py stats-playlist 12345678 -a 林俊杰
+If you encounter any bugs or issues, feel free to open an issue at
+[github](https://github.com/pvorb/node-md5/issues).
 
-# 每日推荐中某歌手的统计
-python3 netease_player.py stats-daily -a 陈奕迅
-```
 
-## 命令参考
+## Credits
 
-| 命令 | 说明 |
-|------|------|
-| `login` | 登录（-p 手机号/邮箱, -P 密码, --sms, --qr） |
-| `status` | 查看登录状态 |
-| `search <关键词>` | 搜索歌曲，交互式选择播放 |
-| `play --id <ID>` | 按歌曲 ID 播放（--level 音质, --lyrics 歌词） |
-| `playlist` | 浏览个人歌单并播放 |
-| `daily` | 每日推荐浏览播放 |
-| `stats-search <关键词>` | 搜索统计（--play-n N, --play-min M） |
-| `stats-playlist <ID>` | 歌单统计（-a 歌手过滤, --play-n, --play-min） |
-| `stats-daily` | 每日推荐统计（-a 歌手过滤, --play-n, --play-min） |
+This package is based on the work of Jeff Mott, who did a pure JS implementation
+of the MD5 algorithm that was published by Ronald L. Rivest in 1991. I needed a
+npm package of the algorithm, so I used Jeff’s implementation for this package.
+The original implementation can be found in the
+[CryptoJS](http://code.google.com/p/crypto-js/) project.
 
-## 播放器后端
 
-按优先级自动选择：
+## License
 
-1. **mpv** - `mpv --no-video <url>`
-2. **ffplay** (ffmpeg) - `ffplay -nodisp -autoexit <url>`
-3. **下载** - HTTP 下载 MP3 到 `/tmp/`
+~~~
+Copyright © 2011-2015, Paul Vorbach.
+Copyright © 2009, Jeff Mott.
 
-## 登录凭证
+All rights reserved.
 
-登录状态保存在 `~/.netease_player/cookies.json`，JSON 格式持久化。
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
 
-## 依赖
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+* Neither the name Crypto-JS nor the names of its contributors may be used to
+  endorse or promote products derived from this software without specific prior
+  written permission.
 
-- Python >= 3.8
-- requests >= 2.28.0
-- pycryptodomex >= 3.15.0
-- ffmpeg（提供 ffplay）
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+~~~
