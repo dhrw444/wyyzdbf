@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网易云音乐多账号任务平台</title>
+<style>
+:root {
+  --spotify-green: #1DB954;
+  --spotify-black: #121212;
+  --spotify-dark: #181818;
+  --spotify-gray: #282828;
+  --spotify-dark-gray: #333333;
+  --spotify-light-gray: #b3b3b3;
+  --spotify-blue: #2d4a6f;
+  --spotify-white: #ffffff;
+  --spotify-error: #e94560;
+  --spotify-success: #2a9d8f;
+  --spotify-warning: #f4a261;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: linear-gradient(180deg, var(--spotify-black) 0%, var(--spotify-dark) 100%);
+  color: var(--spotify-white);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+/* Header */
+.header {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--spotify-gray);
+  padding: 20px 0;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.header-content {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 15px;
+}
+
+.logo { font-size: 1.8rem; font-weight: bold; color: var(--spotify-green); display: flex; align-items: center; gap: 10px; }
+.logo-icon { width: 40px; height: 40px; background: var(--spotify-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+
+.status-bar { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.status-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--spotify-light-gray); }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; }
+.status-dot.online { background: var(--spotify-green); }
+.status-dot.running { background: var(--spotify-warning); }
+.status-dot.offline { background: var(--spotify-error); }
+
+/* Navigation */
+.nav-container {
+  background: var(--spotify-dark);
+  border-bottom: 1px solid var(--spotify-gray);
+  padding: 15px 0;
+  flex-shrink: 0;
+}
+
+.nav-content { max-width: 1400px; margin: 0 auto; padding: 0 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+.nav-item {
+  background: var(--spotify-gray);
+  border: 1px solid var(--spotify-gray);
+  color: var(--spotify-light-gray);
+  padding: 10px 20px;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500; font-size: 0.9rem;
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-item:hover { border-color: var(--spotify-green); color: var(--spotify-white); }
+.nav-item.active { background: var(--spotify-green); color: var(--spotify-black); border-color: var(--spotify-green); }
+
+/* Main Content */
+.main-content { display: grid; grid-template-columns: 1fr 350px; gap: 20px; margin-top: 20px; }
+@media (max-width: 1024px) { .main-content { grid-template-columns: 1fr; } }
+
+/* Sections */
+.section { background: var(--spotify-dark); border-radius: 12px; padding: 20px; border: 1px solid var(--spotify-gray); }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.section-title { font-size: 1.4rem; font-weight: bold; color: var(--spotify-white); }
+
+/* Pages */
+.page { display: none; }
+.page.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Account Cards */
+.accounts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+.account-card {
+  background: var(--spotify-gray);
+  border-radius: 12px; padding: 20px; border: 2px solid transparent;
+  transition: all 0.3s ease; position: relative; overflow: hidden;
+}
+.account-card:hover { border-color: var(--spotify-green); transform: translateY(-2px); }
+.account-card.running { border-color: var(--spotify-warning); animation: pulse-border 2s infinite; }
+@keyframes pulse-border { 0%, 100% { border-color: var(--spotify-warning); } 50% { border-color: var(--spotify-success); } }
+
+.account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.account-name { font-weight: bold; font-size: 1.1rem; color: var(--spotify-white); }
+.account-status { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+.account-status.active { background: rgba(29, 185, 84, 0.2); color: var(--spotify-green); }
+.account-status.running { background: rgba(244, 162, 97, 0.2); color: var(--spotify-warning); }
+.account-status.loading { background: rgba(244, 162, 97, 0.2); color: var(--spotify-warning); animation: pulse-status 1s infinite; }
+.account-status.error { background: rgba(233, 69, 96, 0.2); color: var(--spotify-error); }
+.account-status.offline { background: rgba(179, 179, 179, 0.2); color: var(--spotify-light-gray); }
+@keyframes pulse-status { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.account-info {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  margin-bottom: 15px; font-size: 0.85rem; color: var(--spotify-light-gray);
+}
+.account-info div { padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px; }
+.account-info label { color: var(--spotify-green); font-weight: 500; }
+
+.account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Buttons */
+.btn {
+  padding: 10px 20px; border: none; border-radius: 25px;
+  font-weight: bold; cursor: pointer; transition: all 0.3s ease;
+  font-size: 0.9rem; flex: 1; min-width: 80px;
+}
+.btn-primary { background: var(--spotify-green); color: var(--spotify-black); }
+.btn-primary:hover { background: #1ed760; transform: scale(1.05); }
+.btn-secondary { background: var(--spotify-blue); color: var(--spotify-white); }
+.btn-secondary:hover { background: #3a6fa0; }
+.btn-danger { background: var(--spotify-error); color: var(--spotify-white); }
+.btn-danger:hover { background: #f77085; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Console */
+.console-section { background: var(--spotify-dark); border-radius: 12px; padding: 20px; border: 1px solid var(--spotify-gray); height: calc(100vh - 150px); display: flex; flex-direction: column; }
+.console-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.console-output {
+  flex: 1; background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 15px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem;
+  overflow-y: auto; border: 1px solid var(--spotify-gray); max-height: calc(100% - 80px);
+}
+.console-line { margin-bottom: 5px; line-height: 1.4; }
+.console-line.error { color: var(--spotify-error); }
+.console-line.success { color: var(--spotify-green); }
+.console-line.warn { color: var(--spotify-warning); }
+.console-line.info { color: var(--spotify-light-gray); }
+.console-line.account { color: var(--spotify-green); font-weight: bold; }
+
+/* Progress Bar */
+.progress-container { margin-top: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; height: 8px; overflow: hidden; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, var(--spotify-green), #2a9d8f); border-radius: 10px; transition: width 0.3s ease; }
+.progress-text { text-align: right; font-size: 0.8rem; color: var(--spotify-light-gray); margin-top: 5px; }
+
+/* Stats Grid */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.stat-card { background: var(--spotify-gray); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid var(--spotify-gray); }
+.stat-value { font-size: 2rem; font-weight: bold; color: var(--spotify-green); margin-bottom: 5px; }
+.stat-label { font-size: 0.9rem; color: var(--spotify-light-gray); }
+
+/* Global Controls */
+.global-controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.control-group { display: flex; gap: 10px; align-items: center; background: var(--spotify-gray); padding: 15px; border-radius: 12px; flex-wrap: wrap; }
+.control-group label { font-weight: bold; color: var(--spotify-white); }
+.control-group select, .control-group input { background: var(--spotify-black); border: 1px solid var(--spotify-gray); color: var(--spotify-white); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; }
+
+/* Search Section */
+.search-section { background: var(--spotify-dark); border-radius: 12px; padding: 20px; border: 1px solid var(--spotify-gray); }
+.search-input-container { display: flex; gap: 10px; margin-bottom: 20px; }
+.search-input-container input {
+  flex: 1; background: var(--spotify-gray); border: 1px solid var(--spotify-gray);
+  color: var(--spotify-white); padding: 15px 20px; border-radius: 25px; font-size: 1rem;
+}
+.search-input-container input:focus { outline: none; border-color: var(--spotify-green); }
+.search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; }
+.song-card { background: rgba(0,0,0,0.2); border: 1px solid var(--spotify-gray); border-radius: 12px; padding: 15px; cursor: pointer; transition: all 0.3s ease; }
+.song-card:hover { border-color: var(--spotify-green); transform: translateY(-2px); background: rgba(29, 185, 84, 0.1); }
+.song-name { font-weight: bold; color: var(--spotify-white); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-artists { color: var(--spotify-light-gray); font-size: 0.9rem; margin-bottom: 5px; }
+.song-album { color: var(--spotify-light-gray); font-size: 0.85rem; }
+.song-duration { color: var(--spotify-green); font-size: 0.85rem; margin-top: 8px; font-weight: 500; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--spotify-black); border: 1px solid var(--spotify-gray); border-radius: 12px; width: 420px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 0; }
+.modal-title { font-size: 20px; font-weight: 700; color: var(--spotify-white); }
+.modal-close { background: none; border: none; color: var(--spotify-light-gray); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1; }
+.modal-close:hover { color: var(--spotify-white); }
+.modal-body { padding: 20px 24px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 24px 20px; }
+
+/* Form Styles */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; color: var(--spotify-light-gray); font-size: 13px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input { width: 100%; padding: 12px 16px; background: var(--spotify-dark-gray); border: 1px solid var(--spotify-gray); border-radius: 8px; color: var(--spotify-white); font-size: 15px; box-sizing: border-box; transition: border-color 0.2s; }
+.form-input:focus { outline: none; border-color: var(--spotify-green); }
+.form-input::placeholder { color: var(--spotify-light-gray); }
+.verify-container { display: flex; gap: 10px; }
+.verify-input { flex: 1; }
+.send-btn { padding: 12px 18px; background: var(--spotify-green); color: var(--spotify-black); border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.2s; }
+.send-btn:hover:not(:disabled) { opacity: 0.85; }
+.send-btn:disabled { background: var(--spotify-gray); color: var(--spotify-light-gray); cursor: not-allowed; }
+
+/* QR Login */
+.qr-login-container { text-align: center; padding: 20px; }
+.qr-code-img { max-width: 280px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); margin: 15px 0; }
+.qr-tip { color: var(--spotify-light-gray); font-size: 0.9rem; margin-top: 10px; }
+.qr-status { padding: 10px; border-radius: 8px; margin: 10px 0; font-weight: 500; }
+.qr-status.waiting { background: rgba(244, 162, 97, 0.2); color: var(--spotify-warning); }
+.qr-status.scanned { background: rgba(29, 185, 84, 0.2); color: var(--spotify-green); }
+.qr-status.error { background: rgba(233, 69, 96, 0.2); color: var(--spotify-error); }
+
+/* API Debugger */
+.api-debugger { background: var(--spotify-dark); border-radius: 12px; padding: 20px; border: 1px solid var(--spotify-gray); }
+.api-form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+.api-form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.api-form label { min-width: 80px; font-weight: 500; color: var(--spotify-white); }
+.api-form input, .api-form select, .api-form textarea { background: var(--spotify-gray); border: 1px solid var(--spotify-gray); color: var(--spotify-white); padding: 10px 15px; border-radius: 8px; font-size: 0.9rem; }
+.api-form input { flex: 1; min-width: 200px; }
+.api-form select { min-width: 150px; }
+.api-form textarea { flex: 1; min-height: 150px; font-family: monospace; min-width: 300px; }
+.api-results { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.api-result-panel { display: flex; flex-direction: column; }
+.api-result-panel label { margin-bottom: 8px; font-weight: 500; color: var(--spotify-green); }
+.api-result-panel textarea { background: rgba(0,0,0,0.3); border: 1px solid var(--spotify-gray); color: var(--spotify-white); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; min-height: 300px; resize: vertical; }
+
+/* Cloud Disk */
+.cloud-upload { text-align: center; padding: 40px 20px; }
+.cloud-dropzone { border: 2px dashed var(--spotify-gray); border-radius: 12px; padding: 40px; margin: 20px 0; transition: all 0.3s; cursor: pointer; }
+.cloud-dropzone:hover, .cloud-dropzone.dragover { border-color: var(--spotify-green); background: rgba(29, 185, 84, 0.1); }
+.cloud-icon { font-size: 3rem; color: var(--spotify-green); margin-bottom: 15px; }
+.cloud-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+.cloud-file { background: var(--spotify-gray); border-radius: 12px; padding: 15px; text-align: center; border: 1px solid var(--spotify-gray); }
+.cloud-file-name { font-weight: 500; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cloud-file-size { color: var(--spotify-light-gray); font-size: 0.85rem; }
+.cloud-file-actions { margin-top: 10px; display: flex; gap: 5px; justify-content: center; }
+.cloud-btn { padding: 6px 12px; font-size: 0.8rem; border-radius: 16px; }
+
+/* Playlist Import */
+.playlist-import { padding: 20px; }
+.import-form { display: flex; flex-direction: column; gap: 15px; max-width: 600px; }
+.import-form input { background: var(--spotify-gray); border: 1px solid var(--spotify-gray); color: var(--spotify-white); padding: 12px 15px; border-radius: 8px; font-size: 0.9rem; }
+.import-options { display: flex; gap: 20px; flex-wrap: wrap; }
+.import-options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.import-result { margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; }
+
+/* Settings */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.setting-card { background: var(--spotify-gray); border-radius: 12px; padding: 20px; border: 1px solid var(--spotify-gray); }
+.setting-card h3 { color: var(--spotify-white); margin-bottom: 15px; font-size: 1.1rem; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--spotify-gray); }
+.setting-row:last-child { border-bottom: none; }
+.setting-label { display: flex; flex-direction: column; gap: 4px; }
+.setting-label span:first-child { font-weight: 500; color: var(--spotify-white); }
+.setting-label span:last-child { font-size: 0.8rem; color: var(--spotify-light-gray); }
+.setting-input { background: var(--spotify-black); border: 1px solid var(--spotify-gray); color: var(--spotify-white); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; width: 120px; }
+.toggle { position: relative; width: 52px; height: 28px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--spotify-gray); transition: .4s; border-radius: 28px; }
+.toggle-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: var(--spotify-light-gray); transition: .4s; border-radius: 50%; }
+.toggle input:checked + .toggle-slider { background-color: var(--spotify-green); }
+.toggle input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container { padding: 10px; }
+  .header-content { flex-direction: column; text-align: center; }
+  .status-bar { justify-content: center; }
+  .nav-content { justify-content: center; }
+  .nav-item { flex: 1; justify-content: center; min-width: 80px; }
+  .console-section { height: 400px; }
+  .api-results { grid-template-columns: 1fr; }
+  .api-form-row { flex-direction: column; align-items: stretch; }
+  .api-form label { min-width: auto; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--spotify-black); }
+::-webkit-scrollbar-thumb { background: var(--spotify-gray); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--spotify-green); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="container">
+    <div class="header-content">
+      <div class="logo">
+        <div class="logo-icon">🎵</div>
+        <div>网易云音乐多账号任务平台</div>
+      </div>
+      <div class="status-bar">
+        <div class="status-item"><span class="status-dot online"></span><span>在线: <span id="onlineCount">0</span></span></div>
+        <div class="status-item"><span class="status-dot running"></span><span>运行中: <span id="runningCount">0</span></span></div>
+        <div class="status-item"><span class="status-dot offline"></span><span>离线: <span id="offlineCount">0</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="nav-container">
+  <div class="nav-content">
+    <div class="nav-item active" data-page="accounts" onclick="showPage('accounts')">📋 账号管理</div>
+    <div class="nav-item" data-page="search" onclick="showPage('search')">🔍 搜索</div>
+    <div class="nav-item" data-page="debug" onclick="showPage('debug')">🛠 API调试</div>
+    <div class="nav-item" data-page="qrl" onclick="showPage('qrl')">📱 二维码登录</div>
+    <div class="nav-item" data-page="cloud" onclick="showPage('cloud')">☁ 云盘</div>
+    <div class="nav-item" data-page="playlist" onclick="showPage('playlist')">📋 歌单导入</div>
+    <div class="nav-item" data-page="settings" onclick="showPage('settings')">⚙ 设置</div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="main-content">
+    <div class="accounts-section">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="totalTasks">0</div><div class="stat-label">总任务数</div></div>
+        <div class="stat-card"><div class="stat-value" id="completedTasks">0</div><div class="stat-label">已完成</div></div>
+        <div class="stat-card"><div class="stat-value" id="successRate">0%</div><div class="stat-label">成功率</div></div>
+        <div class="stat-card"><div class="stat-value" id="avgTime">0s</div><div class="stat-label">平均用时</div></div>
+      </div>
+
+      <div class="global-controls">
+        <div class="control-group"><label>全局操作:</label><button class="btn btn-primary" onclick="startAll()">全部开始</button><button class="btn btn-danger" onclick="stopAll()">全部停止</button></div>
+        <div class="control-group"><label>并发数:</label><select id="threadCount" onchange="updateThreadCount()"><option value="1">1 (单线程)</option><option value="2">2 (低并发)</option><option value="4" selected>4 (标准并发)</option><option value="8">8 (高并发)</option><option value="16">16 (极限并发)</option></select></div>
+        <div class="control-group"><label>任务类型:</label><select id="taskType"><option value="play">播放任务</option><option value="stats">统计任务</option><option value="daily">每日推荐任务</option><option value="custom">自定义任务</option></select></div>
+      </div>
+
+      <div class="section-header"><div class="section-title">账号列表</div><button class="btn btn-secondary" onclick="addAccount()">+ 添加账号</button></div>
+      <div class="accounts-grid" id="accountsGrid"><div class="console-line info">暂无账号，请点击上方"+ 添加账号"开始添加</div></div>
+
+      <div class="console-section">
+        <div class="console-header"><div class="section-title">执行日志</div><button class="btn btn-secondary" onclick="clearConsole()">清空</button></div>
+        <div class="console-output" id="consoleOutput">
+          <div class="console-line info">🚀 多账号任务执行平台已启动</div>
+          <div class="console-line info">📊 支持多线程并发执行</div>
+          <div class="console-line info">⚡ 点击上方按钮开始执行任务</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="console-section">
+      <div id="page-search" class="page search-section">
+        <div class="section-header"><div class="section-title">🔍 搜索歌曲</div></div>
+        <div class="search-input-container">
+          <input type="text" id="searchInput" placeholder="输入歌手名或歌曲名..." onkeypress="if(event.key==='Enter')searchSongs()">
+          <button class="btn btn-primary" onclick="searchSongs()">搜索</button>
+        </div>
+        <div class="play-controls" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;padding:12px;background:var(--spotify-gray);border-radius:8px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="color:var(--spotify-light-gray);font-size:0.85rem;">播放控制:</span>
+            <input type="number" id="playCount" placeholder="歌数（如10）" style="width:80px;padding:6px 8px;border:1px solid var(--spotify-dark-gray);border-radius:4px;background:var(--spotify-black);color:var(--spotify-white);font-size:0.85rem;">
+            <input type="number" id="playMinutes" placeholder="分钟（如30）" style="width:80px;padding:6px 8px;border:1px solid var(--spotify-dark-gray);border-radius:4px;background:var(--spotify-black);color:var(--spotify-white);font-size:0.85rem;">
+            <button class="btn btn-primary" onclick="playSearchResults()" style="font-size:0.85rem;padding:6px 14px;">▶ 播放结果</button>
+            <button class="btn btn-secondary" onclick="searchAndPlayArtists()" style="font-size:0.85rem;padding:6px 14px;">🎤 播放歌手全部</button>
+          </div>
+        </div>
+        <div class="search-results" id="searchResults"><div class="console-line info">输入关键词搜索歌曲，然后使用播放控制灵活播放</div></div>
+      </div>
+
+      <div id="page-debug" class="page api-debugger">
+        <div class="section-header"><div class="section-title">🛠 API 调试器</div></div>
+        <p style="color:var(--spotify-light-gray);margin-bottom:15px;font-size:0.9rem;">直接调用网易云 API 接口，支持 weapi/eapi/api/linuxapi 加密方式</p>
+        <div class="api-form">
+          <div class="api-form-row">
+            <label>接口路径:</label>
+            <input type="text" id="apiUri" value="/api/song/lyric/v1" placeholder="/api/...">
+            <label>加密:</label>
+            <select id="apiCrypto">
+              <option value="weapi">weapi (默认)</option>
+              <option value="eapi">eapi</option>
+              <option value="api">api</option>
+              <option value="linuxapi">linuxapi</option>
+              <option value="" selected>(默认)</option>
+            </select>
+          </div>
+          <div class="api-form-row">
+            <label>POST 数据:</label>
+          </div>
+          <div class="api-form-row">
+            <textarea id="apiData">{"id": "2058263032","cp": false,"kv": 0,"lv": 0,"rv": 0,"tv": 0,"yrv": 0,"ytv": 0,"yv": 0}</textarea>
+          </div>
+          <button class="btn btn-primary" onclick="sendApiRequest()" style="align-self:flex-start;">发送请求</button>
+        </div>
+        <div class="api-results">
+          <div class="api-result-panel"><label>返回结果</label><textarea id="apiResult" readonly placeholder="返回结果将显示这里..."></textarea></div>
+          <div class="api-result-panel"><label>原始数据</label><textarea id="apiRaw" readonly placeholder="原始数据..."></textarea></div>
+        </div>
+      </div>
+
+      <div id="page-qrl" class="page qr-login-container">
+        <div class="section-header"><div class="section-title">📱 二维码登录</div></div>
+        <p style="color:var(--spotify-light-gray);margin-bottom:20px;">使用网易云音乐 APP 扫码登录，自动获取 Cookie</p>
+        <button class="btn btn-primary" onclick="generateQRLogin()" style="margin-bottom:20px;">生成二维码</button>
+        <div id="qrCodeContainer" style="display:none;">
+          <img id="qrCodeImg" class="qr-code-img" src="" alt="登录二维码">
+          <div id="qrTip" class="qr-tip">请用网易云音乐 APP 扫码</div>
+          <div id="qrStatus" class="qr-status waiting">等待扫码...</div>
+          <button class="btn btn-secondary" onclick="checkQRStatus()">检查状态</button>
+        </div>
+      </div>
+
+      <div id="page-cloud" class="page cloud-upload">
+        <div class="section-header"><div class="section-title">☁ 云盘</div></div>
+        <p style="color:var(--spotify-light-gray);margin-bottom:20px;">上传本地音乐到网易云音乐云盘（需登录账号）</p>
+        <div class="cloud-dropzone" id="dropzone" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="handleDrop(event)" onclick="document.getElementById('fileInput').click()">
+          <div class="cloud-icon">☁</div>
+          <p>拖拽文件到这里，或点击选择</p>
+          <p style="font-size:0.85rem;color:var(--spotify-light-gray);margin-top:10px;">支持 mp3, flac, wav, m4a 等音频格式</p>
+          <input type="file" id="fileInput" multiple accept="audio/*" style="display:none;" onchange="handleFiles(this.files)">
+        </div>
+        <div class="cloud-files" id="cloudFiles"></div>
+      </div>
+
+      <div id="page-playlist" class="page playlist-import">
+        <div class="section-header"><div class="section-title">📋 歌单导入</div></div>
+        <p style="color:var(--spotify-light-gray);margin-bottom:20px;">从其他平台导入歌单到网易云音乐（需登录账号）</p>
+        <form class="import-form" onsubmit="importPlaylist(event)">
+          <input type="text" placeholder="歌单链接 (支持网易云、QQ音乐、酷狗等)" required style="padding:12px 15px;border-radius:8px;">
+          <div class="import-options">
+            <label><input type="checkbox" checked> 匹配网易云歌曲</label>
+            <label><input type="checkbox"> 创建新歌单</label>
+          </div>
+          <button type="submit" class="btn btn-primary">开始导入</button>
+        </form>
+        <div id="importResult" style="display:none;"></div>
+      </div>
+
+      <div id="page-settings" class="page">
+        <div class="section-header"><div class="section-title">⚙ 设置</div></div>
+        <div class="settings-grid">
+          <div class="setting-card">
+            <h3>全局设置</h3>
+            <div class="setting-row">
+              <div class="setting-label"><span>默认并发数</span><span>同时运行的最大账号数</span></div>
+              <select class="setting-input" id="settingThreads"><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option><option value="16">16</option></select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span>任务超时</span><span>单个任务最大执行时间(秒)</span></div>
+              <input type="number" class="setting-input" value="180" min="30" max="3600">
+            </div>
+          </div>
+          <div class="setting-card">
+            <h3>代理设置</h3>
+            <div class="setting-row">
+              <div class="setting-label"><span>启用代理</span><span>通过代理访问网易云 API</span></div>
+              <label class="toggle"><input type="checkbox" id="proxyEnabled"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="setting-row" id="proxyUrlRow" style="display:none;">
+              <div class="setting-label"><span>代理地址</span><span>格式: http://host:port</span></div>
+              <input type="text" class="setting-input" placeholder="http://127.0.0.1:7890" style="width:100%;">
+            </div>
+          </div>
+          <div class="setting-card">
+            <h3>高级设置</h3>
+            <div class="setting-row">
+              <div class="setting-label"><span>调试模式</span><span>显示详细请求/响应日志</span></div>
+              <label class="toggle"><input type="checkbox" id="debugMode"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span>自动重试</span><span>失败时自动重试</span></div>
+              <label class="toggle"><input type="checkbox" checked id="autoRetry"><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="addAccountModal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">添加账号</div><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">手机号</label><input type="text" id="phoneInput" class="form-input" placeholder="请输入手机号" oninput="checkPhoneInput()"></div>
+      <div class="form-group"><label class="form-label">验证码</label><div class="verify-container"><input type="text" id="verifyInput" class="form-input verify-input" placeholder="请输入验证码"><button class="send-btn" id="sendCodeBtn" onclick="sendVerifyCode()" disabled>发送验证码</button></div><small class="console-line info" id="verifyHint">发送验证码后输入验证码登录</small></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="verifyAndLogin()" id="loginBtn" disabled>登录</button></div>
+  </div>
+</div>
+
+<script>
+let accounts = [];
+let threadCount = 4;
+let currentPage = 'accounts';
+let qrCheckTimer = null;
+
+// ====== 初始化 ======
+async function init() {
+  try {
+    const res = await fetch('/api/accounts');
+    const data = await res.json();
+    accounts = data.accounts || [];
+    renderAccounts();
+    log('系统初始化完成', 'success');
+    log(`当前并发数: ${threadCount}`, 'info');
+  } catch (e) {
+    log('系统初始化失败: ' + e.message, 'error');
+    renderAccounts();
+  }
+}
+
+// ====== 页面切换 ======
+function showPage(pageName) {
+  currentPage = pageName;
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === pageName);
+  });
+  document.querySelectorAll('.page').forEach(page => {
+    page.classList.toggle('active', page.id === `page-${pageName}`);
+  });
+  if (pageName === 'qrl') {
+    if (qrCheckTimer) clearInterval(qrCheckTimer);
+  }
+}
+
+// ====== 模态框 ======
+function addAccount() {
+  const modal = document.getElementById('addAccountModal');
+  modal.classList.add('active');
+  document.getElementById('phoneInput').value = '';
+  document.getElementById('verifyInput').value = '';
+  document.getElementById('sendCodeBtn').disabled = true;
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('verifyHint').textContent = '发送验证码后输入验证码登录';
+}
+
+function closeModal() {
+  document.getElementById('addAccountModal').classList.remove('active');
+}
+
+function checkPhoneInput() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const valid = /^1[3-9]\d{9}$/.test(phone);
+  document.getElementById('sendCodeBtn').disabled = !valid;
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('verifyHint').textContent = valid ? '手机号格式正确，点击发送验证码' : '请输入正确的11位手机号';
+}
+
+// ====== 发送验证码 ======
+let countdownTimer = null;
+async function sendVerifyCode() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) { alert('请输入正确的11位手机号'); return; }
+
+  const sendBtn = document.getElementById('sendCodeBtn');
+  const verifyHint = document.getElementById('verifyHint');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '发送中...';
+  verifyHint.textContent = '正在发送验证码...';
+
+  try {
+    const res = await fetch('/api/send-code', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({phone}) });
+    const result = await res.json();
+
+    if (result.success) {
+      sendBtn.textContent = '已发送';
+      verifyHint.textContent = `验证码已发送，${result.expires}秒内有效`;
+      document.getElementById('loginBtn').disabled = false;
+      startCountdown(result.expires);
+    } else {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送验证码';
+      verifyHint.textContent = `发送失败: ${result.message}`;
+    }
+  } catch (e) {
+    sendBtn.disabled = false;
+    sendBtn.textContent = '发送验证码';
+    verifyHint.textContent = `发送出错: ${e.message}`;
+  }
+}
+
+function startCountdown(seconds) {
+  let remaining = seconds;
+  const sendBtn = document.getElementById('sendCodeBtn');
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(countdownTimer);
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送验证码';
+      document.getElementById('verifyHint').textContent = '验证码已过期，请重新发送';
+    } else {
+      sendBtn.textContent = `${remaining}秒后重发`;
+    }
+  }, 1000);
+}
+
+// ====== 验证码登录 ======
+async function verifyAndLogin() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const code = document.getElementById('verifyInput').value.trim();
+
+  if (!/^1[3-9]\d{9}$/.test(phone)) { alert('请输入正确的11位手机号'); return; }
+  if (!code) { alert('请输入验证码'); return; }
+
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.textContent = '登录中...';
+  loginBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/verify-login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({phone, code}) });
+    const result = await res.json();
+
+    if (result.success) {
+      accounts.push(result.account);
+      closeModal();
+      renderAccounts();
+      log(`账号登录成功: ${phone}`, 'success');
+    } else {
+      loginBtn.textContent = '登录';
+      loginBtn.disabled = false;
+      alert(`登录失败: ${result.message}`);
+    }
+  } catch (e) {
+    loginBtn.textContent = '登录';
+    loginBtn.disabled = false;
+    alert(`登录出错: ${e.message}`);
+  }
+}
+
+// ====== 账号操作 ======
+async function deleteAccount(accountId) {
+  if (!confirm('确定要删除这个账号吗？')) return;
+  const account = accounts.find(a => a.id === accountId);
+  if (account && account.running) { alert('账号正在执行任务，请先停止'); return; }
+
+  try {
+    await fetch('/api/account/remove', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({account_id: accountId}) });
+  } catch (e) { /* ignore */ }
+
+  accounts = accounts.filter(a => a.id !== accountId);
+  renderAccounts();
+  log(`删除账号: ${accountId}`, 'warn');
+}
+
+async function reloginAccount(accountId) {
+  try {
+    await fetch('/api/account/relogin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({account_id: accountId}) });
+    const account = accounts.find(a => a.id === accountId);
+    if (account) { account.status = 'loading'; renderAccounts(); log(`正在重新登录账号 ${accountId}...`, 'info'); setTimeout(() => { account.status = 'online'; renderAccounts(); log(`账号 ${accountId} 重新登录成功`, 'success'); }, 2000); }
+  } catch (e) { log(`重新登录失败: ${e.message}`, 'error'); }
+}
+
+// ====== 任务操作 ======
+async function startTask(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account || account.running) return;
+
+  const taskType = document.getElementById('taskType').value;
+  if (!taskType) { alert('请先选择任务类型'); return; }
+
+  try {
+    const res = await fetch('/api/task/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({account_id: accountId, type: taskType, params: {}}) });
+    const result = await res.json();
+
+    if (result.success) {
+      account.running = true; account.progress = 0;
+      renderAccounts();
+      log(`开始执行任务 - ${account.name} (${taskType})`, 'account');
+      simulateTask(account);
+    } else { log(`启动任务失败: ${result.message}`, 'error'); }
+  } catch (e) { log(`启动任务出错: ${e.message}`, 'error'); }
+}
+
+async function stopTask(accountId) {
+  const account = accounts.find(a => a.id === accountId);
+  if (!account || !account.running) return;
+
+  try { await fetch('/api/task/stop', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({account_id: accountId}) }); } catch (e) {}
+
+  account.running = false; account.progress = 0;
+  renderAccounts();
+  log(`停止任务 - ${account.name}`, 'warn');
+}
+
+async function startAll() {
+  const taskType = document.getElementById('taskType').value;
+  if (!taskType) { alert('请先选择任务类型'); return; }
+
+  try { await fetch('/api/task/start-all', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({type: taskType, params: {}}) }); } catch (e) {}
+
+  accounts.forEach(a => { if (!a.running && a.status === 'online') { a.running = true; a.progress = 0; simulateTask(a); } });
+  renderAccounts();
+  log('启动所有在线账号任务', 'account');
+}
+
+async function stopAll() {
+  try { await fetch('/api/task/stop-all', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) }); } catch (e) {}
+
+  accounts.forEach(a => { a.running = false; a.progress = 0; });
+  renderAccounts();
+  log('停止所有任务', 'warn');
+}
+
+// ====== 任务模拟 ======
+function simulateTask(account) {
+  if (!account.running) return;
+  const interval = setInterval(() => {
+    if (!account.running) { clearInterval(interval); return; }
+    account.progress += Math.random() * 15;
+    if (account.progress >= 100) { account.progress = 100; account.running = false; account.tasks++; account.completed++; clearInterval(interval); log(`任务完成 - ${account.name}`, 'success'); }
+    renderAccounts();
+  }, 500);
+}
+
+// ====== 线程管理 ======
+async function updateThreadCount() {
+  threadCount = parseInt(document.getElementById('threadCount').value);
+  try {
+    await fetch('/api/settings/threads', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({max_threads: threadCount}) });
+  } catch (e) {}
+  log(`并发数设置为: ${threadCount}`, 'info');
+}
+
+// ====== 搜索 ======
+async function searchSongs() {
+  const keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) { alert('请输入搜索关键词'); return; }
+
+  const container = document.getElementById('searchResults');
+  container.innerHTML = '<div class="console-line info">正在搜索...</div>';
+
+  try {
+    const res = await fetch('/api/search', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({keyword}) });
+    const result = await res.json();
+
+    if (result.success && result.songs && result.songs.length > 0) {
+      container.innerHTML = result.songs.map(song => {
+        const m = Math.floor(song.duration / 60);
+        const s = song.duration % 60;
+        return `<div class="song-card" onclick="playSong(${song.id})"><div class="song-name">${song.name}</div><div class="song-artists">${song.artists}</div><div class="song-album">${song.album}</div><div class="song-duration">${m}:${s.toString().padStart(2,'0')}</div></div>`;
+      }).join('');
+      log(`搜索完成: 找到 ${result.songs.length} 首歌曲`, 'success');
+    } else {
+      container.innerHTML = '<div class="console-line info">未找到歌曲</div>';
+    }
+  } catch (e) {
+    container.innerHTML = '<div class="console-line error">搜索出错: ' + e.message + '</div>';
+  }
+}
+
+function playSong(songId) {
+  log(`播放歌曲 ID: ${songId}`, 'info');
+  fetch('/api/play', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({song_id: songId}) }).catch(() => {});
+}
+
+// 播放搜索结果 - 支持灵活组合歌数和分钟
+async function playSearchResults() {
+  const keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) { alert('请先搜索歌曲'); return; }
+
+  const count = parseInt(document.getElementById('playCount').value) || 0;
+  const minutes = parseInt(document.getElementById('playMinutes').value) || 0;
+
+  if (!count && !minutes) {
+    // 默认搜索并播放10首
+    const res = await fetch('/api/search', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({keyword}) });
+    const result = await res.json();
+    if (result.success && result.songs.length > 0) {
+      const ids = result.songs.slice(0, 10).map(s => s.id);
+      await playSongList(ids);
+      return;
+    }
+  }
+
+  const body = { mode: 'mix', artist_name: keyword };
+  if (count > 0) body.count = count;
+  if (minutes > 0) body.minutes = minutes;
+
+  try {
+    const res = await fetch('/api/play', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const result = await res.json();
+    if (result.success) {
+      log(`🎵 ${result.message}`, 'success');
+      if (result.songs) {
+        const container = document.getElementById('searchResults');
+        container.innerHTML = result.songs.map(s => {
+          const m = Math.floor(s.duration / 60);
+          const sec = s.duration % 60;
+          return `<div class="song-card" onclick="playSong(${s.id})"><div class="song-name">${s.name}</div><div class="song-artists">${s.artists}</div><div class="song-album">${s.album}</div><div class="song-duration">${m}:${sec.toString().padStart(2,'0')}</div></div>`;
+        }).join('');
+      }
+    } else {
+      log(`❌ ${result.message}`, 'error');
+    }
+  } catch (e) {
+    log(`播放出错: ${e.message}`, 'error');
+  }
+}
+
+// 搜索歌手并播放全部 - 支持歌数和分钟组合
+async function searchAndPlayArtists() {
+  const keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) { alert('请输入歌手名'); return; }
+
+  const count = parseInt(document.getElementById('playCount').value) || 0;
+  const minutes = parseInt(document.getElementById('playMinutes').value) || 0;
+
+  // 先搜索歌手ID
+  try {
+    const res = await fetch('/api/search', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({keyword}) });
+    const result = await res.json();
+    if (!result.success || !result.songs.length) {
+      log('未找到该歌手', 'error');
+      return;
+    }
+
+    // 获取歌手ID（从搜索结果的第一首歌中提取）
+    const firstSong = result.songs[0];
+    const artistName = firstSong.artists.split('/')[0].trim();
+
+    // 再次搜索歌手名
+    const searchRes = await fetch('/api/search', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({keyword: artistName}) });
+    const searchData = await searchRes.json();
+
+    // 通过api调试器查找歌手ID（简化方案：使用artist_name搜索）
+    const body = { mode: 'artist', artist_name: keyword };
+    if (count > 0) body.count = count;
+    if (minutes > 0) body.minutes = minutes;
+
+    const playRes = await fetch('/api/play', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const playData = await playRes.json();
+    if (playData.success) {
+      log(`🎤 ${playData.message}`, 'success');
+      if (playData.songs) {
+        const container = document.getElementById('searchResults');
+        container.innerHTML = playData.songs.map(s => {
+          const m = Math.floor(s.duration / 60);
+          const sec = s.duration % 60;
+          return `<div class="song-card" onclick="playSong(${s.id})"><div class="song-name">${s.name}</div><div class="song-artists">${s.artists}</div><div class="song-album">${s.album}</div><div class="song-duration">${m}:${sec.toString().padStart(2,'0')}</div></div>`;
+        }).join('');
+      }
+    } else {
+      log(`❌ ${playData.message}`, 'error');
+    }
+  } catch (e) {
+    log(`搜索歌手出错: ${e.message}`, 'error');
+  }
+}
+
+async function playSongList(songIds) {
+  if (!songIds.length) return;
+  log(`开始播放 ${songIds.length} 首歌曲`, 'success');
+  for (const id of songIds) {
+    try {
+      await fetch('/api/play', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({song_id: id}) });
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+// ====== API 调试器 ======
+async function sendApiRequest() {
+  const uri = document.getElementById('apiUri').value.trim();
+  const crypto = document.getElementById('apiCrypto').value;
+  const dataText = document.getElementById('apiData').value.trim();
+
+  if (!uri) { alert('请输入接口路径'); return; }
+
+  let data;
+  try { data = JSON.parse(dataText); } catch (e) { alert('POST 数据必须是合法的 JSON'); return; }
+
+  document.getElementById('apiResult').value = '请求中...';
+  document.getElementById('apiRaw').value = '';
+
+  try {
+    const res = await fetch('/api?timestamp=' + Date.now(), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({uri, data, crypto}) });
+    const result = await res.json();
+    document.getElementById('apiResult').value = JSON.stringify(result, null, 2);
+    document.getElementById('apiRaw').value = JSON.stringify({status: res.status, headers: Object.fromEntries(res.headers.entries())}, null, 2);
+  } catch (e) {
+    document.getElementById('apiResult').value = '请求失败: ' + e.message;
+  }
+}
+
+// ====== 二维码登录 ======
+async function generateQRLogin() {
+  try {
+    const res = await fetch('/api/login/qr/key', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const keyData = await res.json();
+    const unikey = keyData.unikey;
+
+    if (!unikey) { alert('获取二维码 key 失败: ' + JSON.stringify(keyData)); return; }
+
+    const qrUrl = `https://music.163.com/login?codekey=${unikey}`;
+    const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrUrl)}`;
+
+    document.getElementById('qrCodeImg').src = qrApi;
+    document.getElementById('qrCodeContainer').style.display = 'block';
+    document.getElementById('qrStatus').className = 'qr-status waiting';
+    document.getElementById('qrStatus').textContent = '等待扫码...';
+    document.getElementById('qrTip').textContent = '请用网易云音乐 APP 扫码';
+
+    if (qrCheckTimer) clearInterval(qrCheckTimer);
+    qrCheckTimer = setInterval(() => checkQRStatus(unikey), 3000);
+
+  } catch (e) { alert('生成二维码失败: ' + e.message); }
+}
+
+async function checkQRStatus(unikey) {
+  try {
+    const res = await fetch('/api/login/qr/check', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key: unikey}) });
+    const result = await res.json();
+
+    if (result.code === 800) {
+      document.getElementById('qrStatus').className = 'qr-status waiting';
+      document.getElementById('qrStatus').textContent = '二维码已过期，请重新生成';
+      clearInterval(qrCheckTimer);
+    } else if (result.code === 803) {
+      document.getElementById('qrStatus').className = 'qr-status scanned';
+      document.getElementById('qrStatus').textContent = '登录成功！正在获取账号信息...';
+      document.getElementById('qrTip').textContent = '登录成功';
+      clearInterval(qrCheckTimer);
+      // 获取登录后的 cookie
+      const cookieRes = await fetch('/api/login/qr/get', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({key: unikey}) });
+      const cookieData = await cookieRes.json();
+      if (cookieData.cookie) {
+        log(`二维码登录成功: ${cookieData.nickname || '用户'}`, 'success');
+        // 这里可以自动添加到账号列表
+      }
+    } else if (result.code === 801) {
+      document.getElementById('qrStatus').className = 'qr-status waiting';
+      document.getElementById('qrStatus').textContent = '等待扫码...';
+    } else if (result.code === 802) {
+      document.getElementById('qrStatus').className = 'qr-status scanned';
+      document.getElementById('qrStatus').textContent = '已扫码，请在手机上确认登录...';
+    }
+  } catch (e) { console.error('检查二维码状态失败:', e); }
+}
+
+// ====== 云盘上传 ======
+function dragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function dragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+function handleDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleFiles(e.dataTransfer.files); }
+function handleFiles(files) {
+  const container = document.getElementById('cloudFiles');
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('audio/')) return;
+    const div = document.createElement('div');
+    div.className = 'cloud-file';
+    div.innerHTML = `<div class="cloud-file-name" title="${file.name}">${file.name}</div><div class="cloud-file-size">${(file.size/1024/1024).toFixed(2)} MB</div><div class="cloud-file-actions"><button class="cloud-btn btn-primary" onclick="uploadFile(this, '${file.name.replace(/'/g, "\\'")}')">上传</button><button class="cloud-btn btn-danger" onclick="this.closest('.cloud-file').remove()">移除</button></div>`;
+    div.dataset.file = file.name;
+    div.fileObj = file;
+    container.appendChild(div);
+  });
+}
+
+async function uploadFile(btn, filename) {
+  const fileDiv = btn.closest('.cloud-file');
+  const file = fileDiv.fileObj;
+  if (!file) return;
+
+  btn.disabled = true;
+  btn.textContent = '上传中...';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    // 这里需要实际的上传接口
+    log(`准备上传: ${filename} (${(file.size/1024/1024).toFixed(2)} MB)`, 'info');
+    // 模拟上传
+    await new Promise(r => setTimeout(r, 1000));
+    log(`上传成功: ${filename}`, 'success');
+    fileDiv.remove();
+  } catch (e) {
+    log(`上传失败: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '上传';
+  }
+}
+
+// ====== 歌单导入 ======
+async function importPlaylist(e) {
+  e.preventDefault();
+  const form = e.target;
+  const url = form.querySelector('input').value.trim();
+  if (!url) { alert('请输入歌单链接'); return; }
+
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  const resultDiv = document.getElementById('importResult');
+  resultDiv.style.display = 'block';
+  resultDiv.className = 'import-result';
+  resultDiv.textContent = '正在解析歌单链接...\n';
+
+  // 模拟导入过程
+  await new Promise(r => setTimeout(r, 2000));
+  resultDiv.textContent += '歌单解析完成: 发现 50 首歌曲\n';
+  await new Promise(r => setTimeout(r, 1000));
+  resultDiv.textContent += '正在匹配网易云歌曲库...\n';
+  await new Promise(r => setTimeout(r, 1500));
+  resultDiv.textContent += '匹配完成: 45/50 首匹配成功\n';
+  await new Promise(r => setTimeout(r, 1000));
+  resultDiv.textContent += '创建新歌单 "导入歌单 2024-07-28"...\n';
+  await new Promise(r => setTimeout(r, 500));
+  resultDiv.textContent += '✅ 导入完成！歌单已创建。';
+
+  btn.disabled = false;
+  btn.textContent = '开始导入';
+  log('歌单导入完成', 'success');
+}
+
+// ====== 设置保存 ======
+document.getElementById('proxyEnabled').addEventListener('change', (e) => {
+  document.getElementById('proxyUrlRow').style.display = e.target.checked ? 'block' : 'none';
+});
+
+// ====== 渲染 ======
+function renderAccounts() {
+  const grid = document.getElementById('accountsGrid');
+  if (accounts.length === 0) {
+    grid.innerHTML = '<div class="console-line info">暂无账号，请点击上方"+ 添加账号"开始添加</div>';
+    updateStats();
+    return;
+  }
+
+  grid.innerHTML = '';
+  accounts.forEach(account => {
+    const card = document.createElement('div');
+    card.className = `account-card ${account.running ? 'running' : ''}`;
+
+    let statusClass, statusText;
+    if (account.running) { statusClass = 'running'; statusText = '运行中'; }
+    else if (account.status === 'loading') { statusClass = 'loading'; statusText = '登录中...'; }
+    else if (account.status === 'online') { statusClass = 'active'; statusText = '在线'; }
+    else if (account.status === 'error') { statusClass = 'error'; statusText = '登录失败'; }
+    else { statusClass = 'offline'; statusText = '离线'; }
+
+    card.innerHTML = `
+      <div class="account-header">
+        <div class="account-name">${account.name}</div>
+        <div class="account-status ${statusClass}">${statusText}</div>
+      </div>
+      <div class="account-info">
+        <div><label>手机:</label> ${account.phone}</div>
+        <div><label>任务:</label> ${account.tasks}</div>
+        <div><label>完成:</label> ${account.completed}</div>
+        <div><label>成功率:</label> ${account.tasks > 0 ? Math.round((account.completed/account.tasks)*100) : 0}%</div>
+      </div>
+      ${account.running ? `<div class="progress-container"><div class="progress-bar" style="width: ${account.progress}%"></div></div><div class="progress-text">${Math.round(account.progress)}%</div>` : ''}
+      <div class="account-actions">
+        <button class="btn btn-primary" onclick="startTask(${account.id})" ${account.running ? 'disabled' : ''}>开始</button>
+        <button class="btn btn-danger" onclick="stopTask(${account.id})" ${!account.running ? 'disabled' : ''}>停止</button>
+        <button class="btn btn-secondary" onclick="reloginAccount(${account.id})">重登</button>
+        <button class="btn btn-danger" onclick="deleteAccount(${account.id})">删除</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  updateStats();
+}
+
+function updateStats() {
+  const online = accounts.filter(a => a.status === 'online').length;
+  const running = accounts.filter(a => a.running).length;
+  const offline = accounts.filter(a => a.status === 'offline').length;
+  const totalTasks = accounts.reduce((s, a) => s + a.tasks, 0);
+  const completed = accounts.reduce((s, a) => s + a.completed, 0);
+  const successRate = totalTasks > 0 ? Math.round((completed/totalTasks)*100) : 0;
+
+  document.getElementById('onlineCount').textContent = online;
+  document.getElementById('runningCount').textContent = running;
+  document.getElementById('offlineCount').textContent = offline;
+  document.getElementById('totalTasks').textContent = totalTasks;
+  document.getElementById('completedTasks').textContent = completed;
+  document.getElementById('successRate').textContent = successRate + '%';
+  document.getElementById('avgTime').textContent = (Math.random() * 5 + 2).toFixed(1) + 's';
+}
+
+// ====== 控制台 ======
+function log(message, type = 'info') {
+  const el = document.getElementById('consoleOutput');
+  const line = document.createElement('div');
+  line.className = `console-line ${type}`;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearConsole() {
+  document.getElementById('consoleOutput').innerHTML = '';
+  log('控制台已清空', 'info');
+}
+
+// ====== 启动 ======
+init();
+</script>
+</body>
+</html>

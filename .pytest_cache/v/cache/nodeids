@@ -1,0 +1,20 @@
+[
+  "wyyzdbf/tests/test_basic.py::test_context_manager_reentry",
+  "wyyzdbf/tests/test_basic.py::test_custom_encoding",
+  "wyyzdbf/tests/test_basic.py::test_date_field",
+  "wyyzdbf/tests/test_basic.py::test_delete_mark",
+  "wyyzdbf/tests/test_basic.py::test_delete_mark_skipped",
+  "wyyzdbf/tests/test_basic.py::test_empty_file",
+  "wyyzdbf/tests/test_basic.py::test_encoding",
+  "wyyzdbf/tests/test_basic.py::test_field_name_too_long",
+  "wyyzdbf/tests/test_basic.py::test_float_field_type",
+  "wyyzdbf/tests/test_basic.py::test_header_calculations",
+  "wyyzdbf/tests/test_basic.py::test_header_values",
+  "wyyzdbf/tests/test_basic.py::test_logical_field",
+  "wyyzdbf/tests/test_basic.py::test_long_value_truncation",
+  "wyyzdbf/tests/test_basic.py::test_many_records",
+  "wyyzdbf/tests/test_basic.py::test_numeric_types",
+  "wyyzdbf/tests/test_basic.py::test_roundtrip",
+  "wyyzdbf/tests/test_basic.py::test_value_count_mismatch",
+  "wyyzdbf/tests/test_basic.py::test_write_then_read_roundtrip"
+]
