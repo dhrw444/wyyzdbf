@@ -1074,6 +1074,7 @@ function simulateTask(account) {
     logger.info('服务启动', { port: PORT, maxThreads: state.maxThreads })
     logger.info('AI 自动化系统已集成', { status: musicAutomation ? '已就绪' : '未就绪' })
   })
+}
 
 startServer().catch(err => {
   logger.critical('启动失败', { error: err.message })
