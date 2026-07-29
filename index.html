@@ -288,6 +288,80 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--spotify-gray); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--spotify-green); }
 
+/* AI 控制面板样式 */
+.ai-control-section {
+  display: none;
+}
+
+.ai-control-section.active {
+  display: block;
+}
+
+.ai-status-panel {
+  margin-bottom: 20px;
+}
+
+.ai-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.ai-form-panel {
+  background: var(--spotify-dark);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--spotify-gray);
+  margin-bottom: 20px;
+}
+
+.ai-form-panel h3 {
+  color: var(--spotify-green);
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.ai-checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.ai-checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px;
+  background: var(--spotify-gray);
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.ai-checkbox-group label:hover {
+  background: rgba(29, 185, 84, 0.2);
+  border-color: var(--spotify-green);
+}
+
+.ai-checkbox-group input[type="checkbox"] {
+  margin: 0;
+}
+
+.ai-console {
+  margin-top: 20px;
+}
+
+.ai-console .console-line {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
+}
+
+.ai-console .console-line.ai-info { color: var(--spotify-green); }
+.ai-console .console-line.ai-success { color: var(--spotify-success); }
+.ai-console .console-line.ai-error { color: var(--spotify-error); }
+.ai-console .console-line.ai-warn { color: var(--spotify-warning); }
+
 /* Toast 通知 */
 .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
 .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.9rem; max-width: 400px; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
@@ -320,6 +394,7 @@ body {
     <div class="nav-item active" data-page="accounts" onclick="showPage('accounts')">📋 账号管理</div>
     <div class="nav-item" data-page="search" onclick="showPage('search')">🔍 搜索</div>
     <div class="nav-item" data-page="debug" onclick="showPage('debug')">🛠 API调试</div>
+    <div class="nav-item" data-page="ai" onclick="showPage('ai')">🤖 AI控制</div>
     <div class="nav-item" data-page="qrl" onclick="showPage('qrl')">📱 二维码登录</div>
     <div class="nav-item" data-page="cloud" onclick="showPage('cloud')">☁ 云盘</div>
     <div class="nav-item" data-page="playlist" onclick="showPage('playlist')">📋 歌单导入</div>
@@ -357,6 +432,100 @@ body {
     </div>
 
     <div class="console-section">
+      <div id="page-ai" class="page ai-control-section">
+        <div class="section-header"><div class="section-title">🤖 AI智能控制</div></div>
+        
+        <div class="ai-status-panel">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value" id="aiStatus">未就绪</div><div class="stat-label">AI状态</div></div>
+            <div class="stat-card"><div class="stat-value" id="aiModel">-</div><div class="stat-label">AI模型</div></div>
+            <div class="stat-card"><div class="stat-value" id="aiTasks">0</div><div class="stat-label">AI任务数</div></div>
+            <div class="stat-card"><div class="stat-value" id="aiSuccess">0%</div><div class="stat-label">AI成功率</div></div>
+          </div>
+        </div>
+
+        <div class="ai-controls">
+          <div class="control-group">
+            <button class="btn btn-primary" onclick="checkAIStatus()">🔍 检查AI状态</button>
+            <button class="btn btn-secondary" onclick="generateSmartPlaylist()">🎵 生成智能歌单</button>
+            <button class="btn btn-secondary" onclick="executeBatchTask()">🚀 批量任务</button>
+            <button class="btn btn-secondary" onclick="executeRotationTask()">🔄 账号轮换</button>
+          </div>
+        </div>
+
+        <div class="ai-task-forms">
+          <div class="ai-form-panel">
+            <h3>🎵 智能歌单生成</h3>
+            <div class="form-group">
+              <label class="form-label">选择账号:</label>
+              <select id="aiAccountSelect" class="form-input">
+                <option value="">请选择账号</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">歌单偏好:</label>
+              <textarea id="aiPlaylistPrefs" class="form-input" placeholder="描述你想要的歌单，例如：&quot;我想要一个包含10首流行歌曲的歌单，偏向于华语流行音乐&quot;"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="createSmartPlaylist()">生成歌单</button>
+          </div>
+
+          <div class="ai-form-panel">
+            <h3>🚀 批量任务执行</h3>
+            <div class="form-group">
+              <label class="form-label">任务类型:</label>
+              <select id="aiTaskType" class="form-input">
+                <option value="play">播放任务</option>
+                <option value="stats">统计任务</option>
+                <option value="recommend">推荐任务</option>
+                <option value="custom">自定义任务</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">选择账号:</label>
+              <div id="aiAccountCheckboxes" class="ai-checkbox-group">
+                <!-- 动态生成账号复选框 -->
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">任务参数:</label>
+              <textarea id="aiTaskParams" class="form-input" placeholder="JSON格式的任务参数，例如：{&quot;count&quot;: 10, &quot;duration&quot;: 30}"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="startBatchTask()">开始执行</button>
+          </div>
+
+          <div class="ai-form-panel">
+            <h3>🔄 账号轮换</h3>
+            <div class="form-group">
+              <label class="form-label">目标账号:</label>
+              <div id="aiTargetCheckboxes" class="ai-checkbox-group">
+                <!-- 动态生成目标账号复选框 -->
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">轮换策略:</label>
+              <select id="aiRotationStrategy" class="form-input">
+                <option value="round-robin">轮询模式</option>
+                <option value="load-based">负载均衡</option>
+                <option value="priority-based">优先级模式</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">轮换参数:</label>
+              <textarea id="aiRotationParams" class="form-input" placeholder="JSON格式的轮换参数，例如：{&quot;interval&quot;: 300, &quot;maxTasks&quot;: 5}"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="startRotationTask()">开始轮换</button>
+          </div>
+        </div>
+
+        <div class="ai-console">
+          <div class="console-header"><div class="section-title">🤖 AI任务日志</div><button class="btn btn-secondary" onclick="clearAIConsole()">清空</button></div>
+          <div class="console-output" id="aiConsoleOutput">
+            <div class="console-line info">🤖 AI智能控制系统已加载</div>
+            <div class="console-line info">点击上方按钮开始使用AI功能</div>
+          </div>
+        </div>
+      </div>
+
       <div id="page-search" class="page search-section">
         <div class="section-header"><div class="section-title">🔍 搜索歌曲</div></div>
         <div class="search-input-container">
@@ -1219,8 +1388,287 @@ function clearConsole() {
   log('控制台已清空', 'info');
 }
 
+// ====== AI 控制功能 ======
+let aiTasks = 0;
+let aiSuccessCount = 0;
+
+// 初始化 AI 相关功能
+function initAI() {
+  // 初始化账号选择器
+  updateAccountSelectors();
+  
+  // 定期检查 AI 状态
+  setInterval(checkAIStatus, 30000); // 每30秒检查一次
+}
+
+// 检查 AI 状态
+async function checkAIStatus() {
+  try {
+    const result = await apiRequest('/api/ai/status');
+    if (result.success) {
+      const status = result.data;
+      document.getElementById('aiStatus').textContent = status.initialized ? '就绪' : '未就绪';
+      document.getElementById('aiStatus').className = status.initialized ? 'stat-value' : 'stat-value offline';
+      document.getElementById('aiModel').textContent = status.model || '-';
+      document.getElementById('aiTasks').textContent = aiTasks;
+      document.getElementById('aiSuccess').textContent = aiTasks > 0 ? Math.round((aiSuccessCount / aiTasks) * 100) + '%' : '0%';
+      
+      log(`AI系统状态: ${status.initialized ? '就绪' : '未就绪'}`, 'ai-info');
+    }
+  } catch (error) {
+    log(`AI状态检查失败: ${error.message}`, 'ai-error');
+  }
+}
+
+// 更新账号选择器
+function updateAccountSelectors() {
+  const accountSelect = document.getElementById('aiAccountSelect');
+  const accountCheckboxes = document.getElementById('aiAccountCheckboxes');
+  const targetCheckboxes = document.getElementById('aiTargetCheckboxes');
+  
+  // 清空现有选项
+  accountSelect.innerHTML = '<option value="">请选择账号</option>';
+  accountCheckboxes.innerHTML = '';
+  targetCheckboxes.innerHTML = '';
+  
+  // 添加账号选项
+  accounts.forEach(account => {
+    // 下拉选择器
+    const option = document.createElement('option');
+    option.value = account.id;
+    option.textContent = `${account.name} (${account.phone})`;
+    accountSelect.appendChild(option);
+    
+    // 复选框组
+    const checkboxLabel = document.createElement('label');
+    checkboxLabel.innerHTML = `
+      <input type="checkbox" value="${account.id}" onchange="updateAccountCheckboxes()">
+      ${account.name} (${account.phone})
+    `;
+    accountCheckboxes.appendChild(checkboxLabel);
+    
+    const targetCheckboxLabel = document.createElement('label');
+    targetCheckboxLabel.innerHTML = `
+      <input type="checkbox" value="${account.id}" onchange="updateTargetCheckboxes()">
+      ${account.name} (${account.phone})
+    `;
+    targetCheckboxes.appendChild(targetCheckboxLabel);
+  });
+}
+
+// 生成智能歌单
+async function generateSmartPlaylist() {
+  const accountId = document.getElementById('aiAccountSelect').value;
+  const preferences = document.getElementById('aiPlaylistPrefs').value;
+  
+  if (!accountId) {
+    showToast('请选择账号', 'error');
+    return;
+  }
+  
+  try {
+    const result = await apiRequest('/api/ai/generate-playlist', {
+      method: 'POST',
+      body: JSON.stringify({
+        accountId: accountId,
+        preferences: preferences || {}
+      })
+    });
+    
+    if (result.success) {
+      showToast('智能歌单生成成功', 'success');
+      log(`智能歌单生成成功: 账号 ${accountId}`, 'ai-success');
+      aiTasks++;
+      aiSuccessCount++;
+      updateAIStats();
+    } else {
+      showToast(`歌单生成失败: ${result.message}`, 'error');
+      log(`智能歌单生成失败: ${result.message}`, 'ai-error');
+    }
+  } catch (error) {
+    showToast(`歌单生成出错: ${error.message}`, 'error');
+    log(`智能歌单生成出错: ${error.message}`, 'ai-error');
+  }
+}
+
+// 执行批量任务
+async function executeBatchTask() {
+  const taskType = document.getElementById('aiTaskType').value;
+  const selectedAccounts = Array.from(document.querySelectorAll('#aiAccountCheckboxes input:checked')).map(cb => cb.value);
+  const parameters = document.getElementById('aiTaskParams').value;
+  
+  if (selectedAccounts.length === 0) {
+    showToast('请选择至少一个账号', 'error');
+    return;
+  }
+  
+  let params = {};
+  try {
+    if (parameters) {
+      params = JSON.parse(parameters);
+    }
+  } catch (e) {
+    showToast('任务参数格式错误', 'error');
+    return;
+  }
+  
+  try {
+    const result = await apiRequest('/api/ai/batch-task', {
+      method: 'POST',
+      body: JSON.stringify({
+        accountIds: selectedAccounts,
+        taskType: taskType,
+        parameters: params,
+        priority: 'normal'
+      })
+    });
+    
+    if (result.success) {
+      showToast(`批量任务执行完成: ${result.data.filter(r => r.success).length}/${result.data.length} 成功`, 'success');
+      log(`批量任务执行完成: ${result.data.filter(r => r.success).length}/${result.data.length} 成功`, 'ai-success');
+      aiTasks++;
+      aiSuccessCount += result.data.filter(r => r.success).length;
+      updateAIStats();
+    } else {
+      showToast(`批量任务执行失败: ${result.message}`, 'error');
+      log(`批量任务执行失败: ${result.message}`, 'ai-error');
+    }
+  } catch (error) {
+    showToast(`批量任务执行出错: ${error.message}`, 'error');
+    log(`批量任务执行出错: ${error.message}`, 'ai-error');
+  }
+}
+
+// 执行账号轮换任务
+async function executeRotationTask() {
+  const selectedTargets = Array.from(document.querySelectorAll('#aiTargetCheckboxes input:checked')).map(cb => cb.value);
+  const strategy = document.getElementById('aiRotationStrategy').value;
+  const parameters = document.getElementById('aiRotationParams').value;
+  
+  if (selectedTargets.length === 0) {
+    showToast('请选择至少一个目标账号', 'error');
+    return;
+  }
+  
+  let params = {};
+  try {
+    if (parameters) {
+      params = JSON.parse(parameters);
+    }
+  } catch (e) {
+    showToast('轮换参数格式错误', 'error');
+    return;
+  }
+  
+  try {
+    const result = await apiRequest('/api/ai/rotation-task', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetAccounts: selectedTargets,
+        taskType: 'rotation',
+        parameters: params,
+        strategy: strategy
+      })
+    });
+    
+    if (result.success) {
+      showToast(`账号轮换完成: ${result.data.filter(r => r.success).length}/${result.data.length} 成功`, 'success');
+      log(`账号轮换完成: ${result.data.filter(r => r.success).length}/${result.data.length} 成功`, 'ai-success');
+      aiTasks++;
+      aiSuccessCount += result.data.filter(r => r.success).length;
+      updateAIStats();
+    } else {
+      showToast(`账号轮换失败: ${result.message}`, 'error');
+      log(`账号轮换失败: ${result.message}`, 'ai-error');
+    }
+  } catch (error) {
+    showToast(`账号轮换出错: ${error.message}`, 'error');
+    log(`账号轮换出错: ${error.message}`, 'ai-error');
+  }
+}
+
+// 创建智能歌单（简化版）
+async function createSmartPlaylist() {
+  await generateSmartPlaylist();
+}
+
+// 更新 AI 统计
+function updateAIStats() {
+  document.getElementById('aiTasks').textContent = aiTasks;
+  document.getElementById('aiSuccess').textContent = aiTasks > 0 ? Math.round((aiSuccessCount / aiTasks) * 100) + '%' : '0%';
+}
+
+// 清空 AI 控制台
+function clearAIConsole() {
+  document.getElementById('aiConsoleOutput').innerHTML = '';
+  log('AI控制台已清空', 'ai-info');
+}
+
+// AI 控制台日志
+function aiLog(message, type = 'info') {
+  const el = document.getElementById('aiConsoleOutput');
+  const line = document.createElement('div');
+  line.className = `console-line ai-${type}`;
+  line.textContent = `[${new Date().toLocaleTimeString()}] 🤖 ${message}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// 更新账号复选框状态
+function updateAccountCheckboxes() {
+  const checkboxes = document.querySelectorAll('#aiAccountCheckboxes input:checked');
+  document.getElementById('aiAccountSelect').value = checkboxes.length === 1 ? checkboxes[0].value : '';
+}
+
+function updateTargetCheckboxes() {
+  // 可以添加目标账号复选框的更新逻辑
+}
+
+// 显示页面
+function showPage(pageId) {
+  // 隐藏所有页面
+  document.querySelectorAll('.page').forEach(page => {
+    page.style.display = 'none';
+  });
+  
+  // 显示指定页面
+  const targetPage = document.getElementById(`page-${pageId}`);
+  if (targetPage) {
+    targetPage.style.display = 'block';
+  }
+  
+  // 更新导航栏状态
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.remove('active');
+    if (item.dataset.page === pageId) {
+      item.classList.add('active');
+    }
+  });
+  
+  // 如果是 AI 页面，初始化 AI 功能
+  if (pageId === 'ai') {
+    initAI();
+    checkAIStatus();
+  }
+}
+
+// Toast 通知
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
 // ====== 启动 ======
 init();
+initAI();
 </script>
 <div class="toast-container" id="toastContainer"></div>
 </body>

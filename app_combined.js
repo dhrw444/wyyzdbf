@@ -905,11 +905,162 @@ async function startServer() {
     }
   })
 
+    // ====== AI 自动化集成 ======
+  // 加载音乐自动化系统
+  let musicAutomation = null
+  
+  async function initializeMusicAutomation() {
+    try {
+      const { MusicAutomation } = require('./skills/music-automation')
+      musicAutomation = new MusicAutomation({
+        model: 'kimi',
+        apiKey: process.env.OPENAI_API_KEY || 'your-api-key-here',
+        baseUrl: 'https://api.moonshot.cn/v1'
+      })
+      
+      await musicAutomation.initialize()
+      logger.info('音乐自动化系统初始化成功')
+      
+    } catch (error) {
+      logger.warn('音乐自动化系统初始化失败，将使用基础功能', { error: error.message })
+      musicAutomation = null
+    }
+  }
+  
+  // 初始化 AI 系统
+  initializeMusicAutomation()
+
+  // ====== AI 自动化 API 端点 ======
+  
+  // POST /api/ai/status - 获取 AI 系统状态
+  app.get('/api/ai/status', (req, res) => {
+    try {
+      const status = musicAutomation ? musicAutomation.getStatus() : {
+        initialized: false,
+        message: 'AI 系统未初始化'
+      }
+      
+      res.json({ success: true, data: status })
+    } catch (error) {
+      logger.error('获取 AI 状态失败', { error: error.message })
+      res.status(500).json({ success: false, message: '服务器内部错误' })
+    }
+  })
+
+  // POST /api/ai/smart-task - 执行智能任务
+  app.post('/api/ai/smart-task', async (req, res) => {
+    try {
+      if (!musicAutomation) {
+        return res.status(503).json({ success: false, message: 'AI 系统未就绪' })
+      }
+      
+      const { accountId, task, preferences = {} } = req.body
+      
+      if (!accountId || !task) {
+        return res.status(400).json({ success: false, message: '缺少必要参数' })
+      }
+      
+      const result = await musicAutomation.executeSmartTask({
+        accountId,
+        task,
+        preferences
+      })
+      
+      res.json({ success: true, data: result })
+      
+    } catch (error) {
+      logger.error('智能任务执行失败', { error: error.message })
+      res.status(500).json({ success: false, message: '服务器内部错误' })
+    }
+  })
+
+  // POST /api/ai/batch-task - 执行批量任务
+  app.post('/api/ai/batch-task', async (req, res) => {
+    try {
+      if (!musicAutomation) {
+        return res.status(503).json({ success: false, message: 'AI 系统未就绪' })
+      }
+      
+      const { accountIds, taskType, parameters, priority = 'normal' } = req.body
+      
+      if (!accountIds || !taskType || !Array.isArray(accountIds)) {
+        return res.status(400).json({ success: false, message: '缺少必要参数' })
+      }
+      
+      const result = await musicAutomation.executeBatchTask({
+        accountIds,
+        taskType,
+        parameters,
+        priority
+      })
+      
+      res.json({ success: true, data: result })
+      
+    } catch (error) {
+      logger.error('批量任务执行失败', { error: error.message })
+      res.status(500).json({ success: false, message: '服务器内部错误' })
+    }
+  })
+
+  // POST /api/ai/rotation-task - 执行账号轮换任务
+  app.post('/api/ai/rotation-task', async (req, res) => {
+    try {
+      if (!musicAutomation) {
+        return res.status(503).json({ success: false, message: 'AI 系统未就绪' })
+      }
+      
+      const { targetAccounts, taskType, parameters } = req.body
+      
+      if (!targetAccounts || !taskType || !Array.isArray(targetAccounts)) {
+        return res.status(400).json({ success: false, message: '缺少必要参数' })
+      }
+      
+      const result = await musicAutomation.executeRotationTask({
+        targetAccounts,
+        taskType,
+        parameters
+      })
+      
+      res.json({ success: true, data: result })
+      
+    } catch (error) {
+      logger.error('账号轮换任务执行失败', { error: error.message })
+      res.status(500).json({ success: false, message: '服务器内部错误' })
+    }
+  })
+
+  // POST /api/ai/generate-playlist - 生成智能歌单
+  app.post('/api/ai/generate-playlist', async (req, res) => {
+    try {
+      if (!musicAutomation) {
+        return res.status(503).json({ success: false, message: 'AI 系统未就绪' })
+      }
+      
+      const { accountId, preferences = {} } = req.body
+      
+      if (!accountId) {
+        return res.status(400).json({ success: false, message: '缺少必要参数' })
+      }
+      
+      const result = await musicAutomation.executeSmartTask({
+        accountId,
+        task: '生成个性化歌单',
+        preferences
+      })
+      
+      res.json({ success: true, data: result })
+      
+    } catch (error) {
+      logger.error('智能歌单生成失败', { error: error.message })
+      res.status(500).json({ success: false, message: '服务器内部错误' })
+    }
+  })
+
   // ====== 启动 ======
   app.listen(PORT, '0.0.0.0', () => {
     logger.info('服务启动', { port: PORT, maxThreads: state.maxThreads })
+    logger.info('AI 自动化系统已集成', { status: musicAutomation ? '已就绪' : '未就绪' })
   })
-}
 
 startServer().catch(err => {
   logger.critical('启动失败', { error: err.message })
